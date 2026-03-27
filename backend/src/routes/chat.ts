@@ -16,9 +16,9 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    // Obtener config del agente para saber qué catálogo usar
+    // Obtener config del agente; el catálogo puede venir del body (elección del cliente)
     const config = await AgentConfig.findOne().lean();
-    const catalogoActivo = config?.catalogoActivo || 'supermercado';
+    const catalogoActivo = (req.body.catalogoActivo as string) || config?.catalogoActivo || 'supermercado';
 
     // Obtener o crear conversación
     let conversation = await Conversation.findOne({ sessionId });

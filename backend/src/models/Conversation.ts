@@ -1,5 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
+const MAX_MESSAGES = 100; // límite de mensajes por conversación
+
 export interface ITrace {
   tool: string;
   input: Record<string, unknown>;
@@ -37,5 +39,16 @@ const ConversationSchema = new Schema<IConversation>({
   sessionId: { type: String, required: true, unique: true, index: true },
   messages: [MessageSchema],
 }, { timestamps: true });
+
+// TTL: eliminar conversaciones inactivas después de 30 días
+ConversationSchema.index({ updatedAt: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
+
+// Pre-save: truncar historial para no exceder MAX_MESSAGES
+ConversationSchema.pre('save', function (next) {
+  if (this.messages.length > MAX_MESSAGES) {
+    this.messages = this.messages.slice(-MAX_MESSAGES);
+  }
+  next();
+});
 
 export const Conversation = mongoose.model<IConversation>('Conversation', ConversationSchema);

@@ -89,7 +89,7 @@ export default function ConfigPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await updateAgentConfig(config as unknown as Record<string, string>);
+      await updateAgentConfig(config as Record<string, unknown>);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {

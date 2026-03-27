@@ -35,7 +35,7 @@ export default function CartPanel({ cart, sessionId, onCartUpdate, onCheckout }:
           <span className="text-lg">🛒</span>
           <span className="font-semibold text-gray-800 text-sm">Carrito</span>
           {cart.items.length > 0 && (
-            <span className="bg-brand-lime text-white text-xs font-bold rounded-full px-2 py-0.5">
+            <span className="bg-brand-lime text-gray-900 text-xs font-bold rounded-full px-2 py-0.5">
               {cart.items.length}
             </span>
           )}
