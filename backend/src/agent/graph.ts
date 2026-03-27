@@ -314,6 +314,7 @@ Respuesta correcta: "Tenemos Aceite Motor 5W30 Sintético 4L a $12.500 y Líquid
 
 EJEMPLOS INCORRECTOS — NUNCA hagas esto:
 ❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
+❌ "La respuesta sería: \"Sí, tenemos el Taladro Percutor...\""  <- enmarcado prohibido
 ❌ "No puedo llamar a ninguna función para responder a esta pregunta. Puedo describir los productos..."  <- pensamiento interno prohibido
 ❌ "No necesito llamar a ninguna función para responder..."  <- pensamiento interno prohibido
 ❌ "No hay necesidad de llamar a ninguna función para responder a esta pregunta."  <- pensamiento interno prohibido
@@ -332,6 +333,9 @@ function sanitizeResponse(text: string): string {
   // ── Limpiar monólogo interno del modelo ─────────────────────────────────
   // llama3.1 expone razonamiento interno o disculpas meta antes de la respuesta real
   const internalThoughtPatterns = [
+    // "La respuesta sería: / es: / correcta sería:" — el modelo enmarca antes de responder
+    /^la respuesta (ser[ií]a|es|correcta (ser[ií]a|es))\s*[:.]?\s*\n*/gi,
+    /^(mi respuesta|la respuesta adecuada|la respuesta correcta)\s*(ser[ií]a|es)\s*[:.]?\s*\n*/gi,
     // Patrón amplio: cualquier oración que mencione 'llamar/función/herramienta' en contexto meta
     /^[^\n]*(no (necesito|puedo|debo|hay que|hay necesidad de|es necesario|se necesita)) llamar[^\n]*\n+/gi,
     /^[^\n]*(no (necesito|puedo|debo)) (usar|utilizar|invocar|ejecutar)[^\n]*(función|herramienta|tool)[^\n]*\n+/gi,
