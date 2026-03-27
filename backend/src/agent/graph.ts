@@ -315,6 +315,7 @@ Respuesta correcta: "Tenemos Aceite Motor 5W30 Sintético 4L a $12.500 y Líquid
 EJEMPLOS INCORRECTOS — NUNCA hagas esto:
 ❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
 ❌ "No necesito llamar a ninguna función para responder..."  <- pensamiento interno prohibido
+❌ "No hay necesidad de llamar a ninguna función para responder a esta pregunta."  <- pensamiento interno prohibido
 ❌ "Sin embargo, si necesito llamar a una función..."  <- pensamiento interno prohibido
 ❌ "Como no hay una función específica llamada..."  <- pensamiento interno prohibido
 ❌ "Sierra Circular (PRODUCT_ID=69c5a76539d3f728a225baf5) por $42000"  <- PRODUCT_ID prohibido
@@ -355,6 +356,10 @@ function sanitizeResponse(text: string): string {
     /[.\s]*(sin embargo|aunque),?\s*no puedo[^.]*(JSON|formato|código)[^.]*\./gi,
     // frases de rechazo con filtro de seguridad falso
     /[.\s]*no puedo proporcionar asistencia[^.]*\./gi,
+    // frases de monólogo embebidas en cualquier posición
+    /[^.]*no hay necesidad de llamar[^.]*función[^.]*\.?\s*/gi,
+    /[^.]*no (es|hay) necesidad[^.]*(llamar|función|herramienta)[^.]*\.?\s*/gi,
+    /[^.]*no necesito llamar[^.]*(función|herramienta)[^.]*\.?\s*/gi,
     /[.\s]*no puedo (ayudar|asistir) con[^.]*(ilegales|dañinas|contenido|actividades)[^.]*\./gi,
     /[.\s]*esto (está|parece) fuera de (mi|mis)[^.]*\./gi,
     /[.\s]*no puedo proporcionar información sobre (herramientas|materiales|repuestos|productos|precios|características)[^.]*\./gi,
