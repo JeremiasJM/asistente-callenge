@@ -280,7 +280,7 @@ PROHIBICIONES ABSOLUTAS DE HERRAMIENTAS:
 - JAMÁS llames: getProductInfo, getProductDetails, searchProducts, getProducts, lookupProduct ni ninguna otra. NO EXISTEN.
 - NO llames ninguna herramienta para responder preguntas sobre precios, disponibilidad o características. Esa info ya está en el CATÁLOGO a continuación.
 - NO llames getCart salvo que el cliente pida EXPLÍCITAMENTE ver su carrito.
-- NO llames addToCart salvo que el cliente diga EXPLÍCITAMENTE que quiere comprar o agregar un producto concreto del catálogo.
+- Llamá addToCart cuando el cliente diga "quiero", "dame", "agrega", "poneme", "necesito", "me llevo" + un producto concreto del catálogo. Esas palabras indican intención de compra clara.
 - NO llames confirmOrder salvo que el cliente diga EXPLÍCITAMENTE confirmar/finalizar/pagar.
 - NUNCA uses un productId inventado. Usa exactamente el valor PRODUCT_ID del catálogo (string hexadecimal de 24 caracteres). No incluyas 'PRODUCT_ID=' ni '_id:', solo el hex.
 - Si un producto NO está en el catálogo, di que no lo tenés. No llames ninguna herramienta.
@@ -309,6 +309,9 @@ Respuesta correcta: "El Taladro Percutor 13mm 750W está a $28.500. Tenemos 15 u
 Cliente: "¿Qué repuestos tienen para auto?"
 Respuesta correcta: "Tenemos Aceite Motor 5W30 Sintético 4L a $12.500 y Líquido de Frenos DOT4 500ml a $1.800. ¿Te puedo ayudar con algo?"
 
+Cliente: "dame aceite de girasol" / "quiero el taladro" / "poneme una leche"
+Respuesta correcta: [llamar addToCart con el productId exacto del catálogo, luego confirmar] "¡Listo! Agregué Aceite de Girasol 1.5L al carrito. ¿Querés algo más?"
+
 EJEMPLOS INCORRECTOS — NUNCA hagas esto:
 ❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
 ❌ "La respuesta sería: \"Sí, tenemos el Taladro Percutor...\""  <- enmarcado prohibido
@@ -335,6 +338,7 @@ function sanitizeResponse(text: string): string {
     /^(mi respuesta|la respuesta adecuada|la respuesta correcta)\s*(ser[ií]a|es)\s*[:.]?\s*\n*/gi,
     // Patrón amplio: cualquier oración que mencione 'llamar/función/herramienta' en contexto meta
     /^[^\n]*(no (necesito|puedo|debo|hay que|hay necesidad de|es necesario|se necesita)) llamar[^\n]*\n+/gi,
+    /^[^\n]*(no tengo una función (específica|disponible|para)[^\n]*)[^\n]*\n+/gi,
     /^[^\n]*(no (necesito|puedo|debo)) (usar|utilizar|invocar|ejecutar)[^\n]*(función|herramienta|tool)[^\n]*\n+/gi,
     /^[^\n]*(llamar a (ninguna|una|la|alguna) función)[^\n]*\n+/gi,
     // "Puedo describir/listar los productos..." — frase meta de capacidad
@@ -370,6 +374,7 @@ function sanitizeResponse(text: string): string {
     /[^.\n]*llamar a (ninguna|una|la|alguna) función para responder[^.\n]*\.?\s*/gi,
     /[^.\n]*(no (es|hay) necesidad|no es necesario)[^.\n]*(llamar|función|herramienta)[^.\n]*\.?\s*/gi,
     /[^.\n]*no necesito llamar[^.\n]*(función|herramienta)[^.\n]*\.?\s*/gi,
+    /[^.\n]*no tengo una función (específica|disponible)[^.\n]*\.?\s*/gi,
     /[^.\n]*puedo (describir|listar|mencionar) los productos[^.\n]*\.?\s*/gi,
     /[^.\n]*puedo (describir|listar|mencionar) (el catálogo|los repuestos|las herramientas|los productos disponibles)[^.\n]*\.?\s*/gi,
     /[.\s]*no puedo (ayudar|asistir) con[^.]*(ilegales|dañinas|contenido|actividades)[^.]*\./gi,

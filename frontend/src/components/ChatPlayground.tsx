@@ -13,7 +13,7 @@ const CATALOGS = [
     label: 'Supermercado',
     desc: 'Alimentos, bebidas y limpieza',
     emoji: '🛒',
-    suggestions: ['¿Qué productos tienen?', 'Quiero arroz y leche', 'Mostrar el carrito', '¿Tienen aceite de oliva?'],
+    suggestions: ['¿Qué alimentos tienen?', 'Quiero arroz y leche', 'Mostrar el carrito', '¿Tienen aceite de oliva?'],
   },
   {
     id: 'ferreteria',
