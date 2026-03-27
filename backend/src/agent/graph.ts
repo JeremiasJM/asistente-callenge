@@ -269,6 +269,7 @@ PROHIBICIONES ABSOLUTAS DE HERRAMIENTAS:
 - NUNCA uses un productId inventado. Usa exactamente el valor PRODUCT_ID del catálogo (string hexadecimal de 24 caracteres). No incluyas 'PRODUCT_ID=' ni '_id:', solo el hex.
 - Si un producto NO está en el catálogo, di que no lo tenés. No llames ninguna herramienta.
 - NUNCA NUNCA escribas JSON en tu respuesta al cliente. Si ves que estás a punto de escribir '{', PARÁ y reescribí en español natural.
+- NUNCA menciones PRODUCT_ID, _id, hex codes, ni ningún dato técnico interno en tu respuesta. El cliente solo debe ver nombre, precio y descripción.
 
 CATÁLOGO DE PRODUCTOS DISPONIBLES:
 ${catalogContext}
@@ -288,7 +289,9 @@ EJEMPLOS INCORRECTOS — NUNCA hagas esto:
 ❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
 ❌ "No necesito llamar a ninguna función para responder..."  <- pensamiento interno prohibido
 ❌ "Sin embargo, si necesito llamar a una función..."  <- pensamiento interno prohibido
-❌ "Como no hay una función específica llamada..."  <- pensamiento interno prohibido`;
+❌ "Como no hay una función específica llamada..."  <- pensamiento interno prohibido
+❌ "Sierra Circular (PRODUCT_ID=69c5a76539d3f728a225baf5) por $42000"  <- PRODUCT_ID prohibido
+❌ "Taladro | PRODUCT_ID=abc123... | price=..."  <- datos técnicos internos prohibidos`;
 }
 
 // ── Limpia respuestas con JSON hallucination del modelo ──────────────────
@@ -336,6 +339,15 @@ function sanitizeResponse(text: string): string {
 
   // Llaves o corchetes sueltos al final (residuos de JSON)
   result = result.replace(/[\s\n]*[}\]]+\s*$/g, '');
+
+  // ── Eliminar PRODUCT_ID que el modelo copia del catálogo al texto visible ─
+  // ej: "Sierra Circular (PRODUCT_ID=69c5a76539d3f728a225baf5) por $42000"
+  // ej: "Taladro | PRODUCT_ID=69c5a76539d3f728a225baf5 | price=$28500"
+  result = result.replace(/\s*[\|(]\s*PRODUCT_ID=[a-f0-9]{24}\s*[|)]/gi, '');
+  result = result.replace(/\s*\(PRODUCT_ID=[a-f0-9]{24}\)/gi, '');
+  result = result.replace(/\s*PRODUCT_ID=[a-f0-9]{24}/gi, '');
+  // También eliminar menciones crudas de _id hex que puedan filtrarse
+  result = result.replace(/\b_id[:\s=]+[a-f0-9]{24}\b/gi, '');
 
   // Notas internas entre paréntesis
   result = result
