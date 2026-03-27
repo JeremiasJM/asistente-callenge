@@ -69,7 +69,14 @@ export default function ChatPlayground() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const doSend = (override?: string) => {
+  // Cancelar stream activo al desmontar el componente
+  useEffect(() => {
+    return () => {
+      cancelStreamRef.current?.();
+    };
+  }, []);
+
+  const doSend = useCallback((override?: string) => {
     const text = (override ?? input).trim();
     if (!text || isLoading) return;
 
@@ -108,10 +115,10 @@ export default function ChatPlayground() {
       },
       (trace) => { collectedTraces.push(trace); },
       (cart) => setCart(cart as Cart),
-      (_response) => {
+      (response) => {
         setMessages((prev) =>
           prev.map((m) => m.id === assistantId
-            ? { ...m, isStreaming: false, traces: collectedTraces }
+            ? { ...m, content: response || m.content, isStreaming: false, traces: collectedTraces }
             : m)
         );
         setIsLoading(false);
@@ -127,7 +134,7 @@ export default function ChatPlayground() {
         inputRef.current?.focus();
       },
     );
-  };
+  }, [input, isLoading, sessionId, catalogo]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

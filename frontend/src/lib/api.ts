@@ -1,15 +1,5 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export async function sendMessage(message: string, sessionId: string) {
-  const res = await fetch(`${API_URL}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, sessionId }),
-  });
-  if (!res.ok) throw new Error('Error al enviar mensaje');
-  return res.json();
-}
-
 export async function getCart(sessionId: string) {
   const res = await fetch(`${API_URL}/api/cart/${sessionId}`);
   if (!res.ok) throw new Error('Error al obtener carrito');
@@ -38,7 +28,7 @@ export async function getAgentConfig() {
   return res.json();
 }
 
-export async function updateAgentConfig(config: Record<string, string>) {
+export async function updateAgentConfig(config: Record<string, unknown>) {
   const res = await fetch(`${API_URL}/api/config`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -69,12 +59,11 @@ export function sendMessageStream(
   onDone: (response: string) => void,
   onError: (err: string) => void,
 ): () => void {
-  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   let cancelled = false;
 
   (async () => {
     try {
-      const res = await fetch(`${API}/api/chat/stream`, {
+      const res = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, sessionId, catalogoActivo }),

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { ChatOllama } from '@langchain/ollama';
 import { HumanMessage, AIMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
 import { StateGraph, MessagesAnnotation, END, START } from '@langchain/langgraph';
@@ -35,13 +36,17 @@ function buildCartTools(sessionId: string) {
       try {
         const product = await Product.findById(productId);
         if (!product) return JSON.stringify({ success: false, message: 'Producto no encontrado. Verificá el ID.' });
-        if (product.stock < quantity) return JSON.stringify({ success: false, message: `Stock insuficiente. Disponible: ${product.stock}` });
         if (product.estado !== 'activo') return JSON.stringify({ success: false, message: 'Producto no disponible actualmente.' });
 
         let cart = await Cart.findOne({ sessionId });
         if (!cart) cart = new Cart({ sessionId, items: [], total: 0 });
 
         const idx = cart.items.findIndex((i) => i.productId.toString() === productId);
+        const existingQty = idx >= 0 ? cart.items[idx].cantidad : 0;
+        if (existingQty + quantity > product.stock) {
+          return JSON.stringify({ success: false, message: `Stock insuficiente. Solo quedan ${product.stock - existingQty} unidades disponibles.` });
+        }
+
         if (idx >= 0) {
           cart.items[idx].cantidad += quantity;
           cart.items[idx].subtotal = cart.items[idx].precio * cart.items[idx].cantidad;
@@ -121,7 +126,8 @@ function buildCartTools(sessionId: string) {
         if (!cart || cart.items.length === 0) {
           return JSON.stringify({ success: false, message: 'El carrito está vacío, no se puede confirmar el pedido.' });
         }
-        const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`;
+        const orderNumber = `ORD-${randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase()}`;
+        const itemsSnapshot = [...cart.items];
         await Order.create({
           sessionId,
           orderNumber,
@@ -129,8 +135,12 @@ function buildCartTools(sessionId: string) {
           total: cart.total,
           status: 'confirmed',
         });
+        // Descontar stock de cada producto vendido
+        for (const item of itemsSnapshot) {
+          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -item.cantidad } });
+        }
         const total = cart.total;
-        const itemCount = cart.items.reduce((s, i) => s + i.cantidad, 0);
+        const itemCount = itemsSnapshot.reduce((s, i) => s + i.cantidad, 0);
         cart.items = [];
         cart.total = 0;
         await cart.save();
@@ -238,30 +248,79 @@ async function buildSystemPrompt(sessionId: string, catalogoActivo?: string): Pr
 
   return `${basePrompt}
 
-Rules:
-- ALWAYS respond in Spanish with friendly natural language. NEVER use JSON, code blocks, or lists of raw data in your responses.
-- Personality: ${tonoDesc[tono] || tonoDesc.amigable}
-- Goals: ${objetivos}
-- Business rules: ${reglas}
+INSTRUCCIONES OBLIGATORIAS — LEELAS COMPLETAS ANTES DE RESPONDER:
 
-Available tools: addToCart, removeFromCart, getCart, confirmOrder. Do NOT call any other tool.
-Customer session ID (for cart tools): ${sessionId}
+1. IDIOMA: Responde SIEMPRE en español, con lenguaje natural y conversacional.
+2. FORMATO: NUNCA escribas JSON, bloques de código, arrays ni datos técnicos en tu respuesta. Las llamadas a herramientas son invisibles para el cliente — él solo ve tu texto.
+3. PERSONALIDAD: ${tonoDesc[tono] || tonoDesc.amigable}
+4. OBJETIVOS: ${objetivos}
+5. REGLAS DE NEGOCIO: ${reglas}
 
 ${deptLine}
 
-PRODUCT CATALOG:
+HERRAMIENTAS DISPONIBLES (SOLO ESTAS 4): addToCart, removeFromCart, getCart, confirmOrder.
+PROHIBICIONES ABSOLUTAS DE HERRAMIENTAS:
+- JAMÁS llames: getProductInfo, getProductDetails, searchProducts, getProducts, lookupProduct ni ninguna otra. NO EXISTEN.
+- NO llames ninguna herramienta para responder preguntas sobre precios, disponibilidad o características. Esa info ya está en el CATÁLOGO a continuación.
+- NO llames getCart salvo que el cliente pida EXPLÍCITAMENTE ver su carrito.
+- NO llames addToCart salvo que el cliente diga EXPLÍCITAMENTE que quiere comprar o agregar un producto concreto del catálogo.
+- NO llames confirmOrder salvo que el cliente diga EXPLÍCITAMENTE confirmar/finalizar/pagar.
+- NUNCA uses un productId inventado. Usa exactamente el valor PRODUCT_ID del catálogo (string hexadecimal de 24 caracteres). No incluyas 'PRODUCT_ID=' ni '_id:', solo el hex.
+- Si un producto NO está en el catálogo, di que no lo tenés. No llames ninguna herramienta.
+- NUNCA NUNCA escribas JSON en tu respuesta al cliente. Si ves que estás a punto de escribir '{', PARÁ y reescribí en español natural.
+
+CATÁLOGO DE PRODUCTOS DISPONIBLES:
 ${catalogContext}
 
-How to respond:
-- If customer asks what products you have: describe them naturally in Spanish, mention name and price. Do not list all: only the ones relevant to the question.
-- If a product the customer wants is NOT in the catalog above: say you don't have it. DO NOT call any tool.
-- ONLY use addToCart when the customer EXPLICITLY says they want to add or buy a product AND you have a valid _id for it from the catalog.
-- ONLY use getCart when the customer explicitly asks to see their cart or order.
-- ONLY use removeFromCart when the customer explicitly asks to remove something.
-- ONLY use confirmOrder when the customer EXPLICITLY says they want to confirm, place, or finalize the order (e.g., "confirmar pedido", "finalizar compra", "quiero pagar"). After confirming, tell them the order number and total.
-- NEVER call addToCart with a fake, placeholder, or made-up productId. Use the PRODUCT_ID value exactly as shown in the catalog (it is a 24-character hex string like '69c5a76539d3f728a225bae7'). Do NOT include 'PRODUCT_ID=' or '_id:' in the productId parameter, just the hex string.
-- Never output JSON, arrays, or code in your response to the customer. Always write naturally.
-- If no products match what the customer asked, say so politely without calling any tool.`;
+CÓMO RESPONDER:
+- Preguntas sobre productos: describe con lenguaje natural (nombre, precio, categoría). No listes todo el catálogo: solo lo relevante a la pregunta.
+- Agregar al carrito: solo cuando el cliente pide comprar algo CONCRETO y está en el catálogo.
+- Ver carrito: solo cuando el cliente lo pide explícitamente.
+- Confirmar pedido: solo cuando el cliente dice claramente que quiere confirmar. Luego informá número de orden y total.
+- Si el cliente saluda sin especificar: preguntale qué está buscando.
+
+EJEMPLO CORRECTO — así debes responder:
+Cliente: "¿Qué aceites tienen?"
+Respuesta correcta: "¡Hola! Tenemos aceite de girasol 1.5L a $890 y aceite de oliva extra virgen 500ml a $2.100. ¿Te puedo agregar alguno?"
+
+EJEMPLO INCORRECTO — NUNCA hagas esto:
+{"name": "getProductInfo", "parameters": {"productId": "..."}}  <- PROHIBIDO, esto no es una herramienta disponible`;
+}
+
+// ── Limpia respuestas con JSON hallucination del modelo ──────────────────
+function sanitizeResponse(text: string): string {
+  if (!text || !text.trim()) return text;
+
+  let result = text.trim();
+
+  // Si la respuesta ES solo JSON de tool-call → descartar todo
+  // Detecta si empieza con { y contiene "name" y "get" (hallucination patrón)
+  if (result.startsWith('{') && /"name"\s*:\s*"get/.test(result)) {
+    // Intentar extraer cualquier texto narrative en español que quede después del JSON
+    const afterJson = result.replace(/^\{[^]*?\}\s*/m, '').trim();
+    // Eliminar notas entre paréntesis sobre herramientas
+    const cleaned = afterJson
+      .replace(/\([^)]*herramienta[^)]*\)/gi, '')
+      .replace(/\([^)]*tool[^)]*\)/gi, '')
+      .replace(/\([^)]*Nota[^)]*\)/gi, '')
+      .replace(/\([^)]*llama a[^)]*\)/gi, '')
+      .replace(/\([^)]*anterior[^)]*\)/gi, '')
+      .trim();
+    // Si no quedó nada útil → string vacío (el caller usará fallback)
+    return cleaned.length > 10 ? cleaned : '';
+  }
+
+  // Si tiene JSON embebido en medio del texto → eliminarlo
+  result = result.replace(/\{[^]*?"name"\s*:\s*"get[^"]*"[^]*?\}/g, '');
+
+  // Eliminar notas sobre herramientas entre paréntesis
+  result = result
+    .replace(/\([^)]*herramienta[^)]*\)/gi, '')
+    .replace(/\([^)]*tool[^)]*\)/gi, '')
+    .replace(/\([^)]*Nota[^)]*\)/gi, '')
+    .replace(/\([^)]*llama a[^)]*\)/gi, '');
+
+  return result.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // ── Crear el grafo del agente ─────────────────────────────────────────────
@@ -286,6 +345,34 @@ export async function createAgentGraph(sessionId: string, catalogoActivo?: strin
   const callModel = async (state: typeof MessagesAnnotation.State) => {
     const messages = [new SystemMessage(systemPrompt), ...state.messages];
     const response = await llm.invoke(messages);
+    // Limpiar JSON hallucination si el modelo escribe tool-calls como texto
+    if (typeof response.content === 'string' && response.content.trim()) {
+      const cleaned = sanitizeResponse(response.content);
+      if (cleaned !== response.content) {
+        if (cleaned.trim().length > 10) {
+          // Quedó texto útil en español → usarlo
+          return { messages: [new AIMessage(cleaned)] };
+        }
+        // Quedó vacío → reintentar con instrucción directa para responder en texto
+        const lastUserMsg = [...state.messages].reverse().find(m => m._getType() === 'human');
+        const retryMessages = [
+          new SystemMessage(systemPrompt),
+          ...state.messages,
+          new HumanMessage(
+            `[INSTRUCCIÓN INTERNA]: Tu respuesta anterior fue inválida (no uses JSON). ` +
+            `Responde en español natural, sin llamar herramientas, basándote SOLO en el catálogo del sistema. ` +
+            `Mensaje original del cliente: "${lastUserMsg?.content ?? ''}"`
+          ),
+        ];
+        try {
+          const retry = await llm.invoke(retryMessages);
+          const retryCleaned = sanitizeResponse(String(retry.content)).trim();
+          return { messages: [new AIMessage(retryCleaned || 'Lo siento, ¿podés repetir la pregunta?')] };
+        } catch {
+          return { messages: [new AIMessage('¿En qué te puedo ayudar?')] };
+        }
+      }
+    }
     return { messages: [response] };
   };
 
@@ -309,7 +396,7 @@ export async function createAgentGraph(sessionId: string, catalogoActivo?: strin
 }
 
 // ── Timeout helper ────────────────────────────────────────────────────────
-const AGENT_TIMEOUT_MS = 120_000; // 2 minutos máximo por llamada a Ollama
+const AGENT_TIMEOUT_MS = 300_000; // 5 minutos máximo por llamada a Ollama
 function rejectAfter(ms: number, label = 'timeout'): Promise<never> {
   return new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`${label}: exceeded ${ms}ms`)), ms)
@@ -388,7 +475,7 @@ export async function runAgent(
     }
     if (errMsg.includes('timeout')) {
       return {
-        response: '⚠️ Ollama tardó demasiado en responder (> 2 min). Verificá que el modelo esté cargado.',
+        response: '⚠️ Ollama tardó demasiado en responder (> 5 min). El modelo puede estar cargando; intentá de nuevo en un momento.',
         traces,
       };
     }
@@ -411,6 +498,7 @@ export async function* runAgentStream(
 ): AsyncGenerator<StreamEvent> {
   const traces: AgentTrace[] = [];
   let fullResponse = '';
+  const toolStartTimes = new Map<string, number>();
 
   try {
     const { graph } = await createAgentGraph(sessionId, catalogoActivo);
@@ -433,7 +521,12 @@ export async function* runAgentStream(
           yield { type: 'token', content: token };
         }
       }
+      if (event.event === 'on_tool_start') {
+        toolStartTimes.set(event.run_id as string, Date.now());
+      }
       if (event.event === 'on_tool_end') {
+        const startTs = toolStartTimes.get(event.run_id as string) ?? Date.now();
+        toolStartTimes.delete(event.run_id as string);
         const trace: AgentTrace = {
           tool: event.name || 'unknown',
           input: (event.data?.input as Record<string, unknown>) || {},
@@ -441,21 +534,22 @@ export async function* runAgentStream(
             try { return JSON.parse(String(event.data?.output || '{}')); }
             catch { return { result: event.data?.output }; }
           })(),
-          duration: 0,
+          duration: Date.now() - startTs,
         };
         traces.push(trace);
         yield { type: 'trace', trace };
       }
     }
 
-    yield { type: 'done', response: fullResponse || '¿En qué más puedo ayudarte?', traces };
+    const finalClean = sanitizeResponse(fullResponse).trim() || fullResponse;
+    yield { type: 'done', response: finalClean || '¿En qué más puedo ayudarte?', traces };
   } catch (error) {
     const errMsg = String(error);
     let humanError: string;
     if (errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch')) {
       humanError = '⚠️ No puedo conectarme a Ollama. Ejecutá: `ollama serve` y luego: `ollama pull llama3.1`';
     } else if (errMsg.includes('timeout')) {
-      humanError = '⚠️ Ollama tardó demasiado en responder (> 2 min). Verificá que el modelo esté cargado.';
+      humanError = '⚠️ Ollama tardó demasiado en responder (> 5 min). El modelo puede estar cargando; intentá de nuevo en un momento.';
     } else {
       humanError = 'Ocurrió un error procesando tu mensaje. Por favor intentá de nuevo.';
     }

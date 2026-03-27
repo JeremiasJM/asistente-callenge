@@ -35,10 +35,6 @@ router.post('/add', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Producto no encontrado' });
       return;
     }
-    if (product.stock < quantity) {
-      res.status(400).json({ error: `Stock insuficiente. Disponible: ${product.stock}` });
-      return;
-    }
     if (product.estado !== 'activo') {
       res.status(400).json({ error: 'Producto no disponible' });
       return;
@@ -52,6 +48,11 @@ router.post('/add', async (req: Request, res: Response) => {
     const existingItemIndex = cart.items.findIndex(
       (item) => item.productId.toString() === productId
     );
+    const existingQty = existingItemIndex >= 0 ? cart.items[existingItemIndex].cantidad : 0;
+    if (existingQty + quantity > product.stock) {
+      res.status(400).json({ error: `Stock insuficiente. Solo quedan ${product.stock - existingQty} unidades disponibles.` });
+      return;
+    }
 
     if (existingItemIndex >= 0) {
       cart.items[existingItemIndex].cantidad += quantity;

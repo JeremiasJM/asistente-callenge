@@ -1,6 +1,6 @@
 # 🤖 Agente Conversacional de Ventas — MVP
 
-MVP funcional de un agente de IA conversacional multirrubro que recomienda productos, gestiona un carrito de compras y confirma pedidos. Construido con Next.js 14, Express/TypeScript, MongoDB, LangGraph y Ollama.
+MVP funcional de un agente de IA conversacional multirrubro que recomienda productos, gestiona un carrito de compras y confirma pedidos. Construido con Next.js 16, Express/TypeScript, MongoDB, LangGraph y Ollama.
 
 ---
 
@@ -11,30 +11,31 @@ Antes de comenzar, asegurate de tener instalado:
 | Herramienta | Versión | Descarga |
 |---|---|---|
 | Node.js | 18+ | https://nodejs.org |
-| MongoDB | 7+ | https://www.mongodb.com/try/download/community |
-| Ollama | latest | https://ollama.com |
+| Docker Desktop | latest | https://www.docker.com/products/docker-desktop |
 
-### 1. Instalar y configurar Ollama
+> **Recomendado:** usar Docker para MongoDB y Ollama — evita instalaciones manuales y funciona igual en cualquier sistema operativo.
 
-```bash
-# 1. Descargar Ollama desde https://ollama.com e instalarlo
-
-# 2. Iniciar el servidor Ollama
-ollama serve
-
-# 3. En otra terminal, descargar el modelo
-ollama pull llama3.1     # Recomendado (~4.7GB) — soporta tool-calling
-```
-
-### 2. Tener MongoDB corriendo
+### 1. Levantar MongoDB con Docker
 
 ```bash
-# Opción A: MongoDB local (servicio de Windows)
-# Asegurate que el servicio "MongoDB" esté iniciado en Services
-
-# Opción B: Con Docker
-docker run -d -p 27017:27017 --name mongodb mongo:7
+docker run -d --name mongodb -p 27017:27017 mongo:7
 ```
+
+### 2. Levantar Ollama con Docker y descargar el modelo
+
+```bash
+# Iniciar servidor Ollama
+docker run -d --name ollama -p 11434:11434 -v ollama_data:/root/.ollama ollama/ollama
+
+# Descargar el modelo llama3.1 (~4.7 GB, soporta tool-calling)
+docker exec ollama ollama pull llama3.1
+```
+
+> **Alternativa sin Docker:** instalar Ollama nativo desde https://ollama.com, luego:
+> ```bash
+> ollama serve
+> ollama pull llama3.1
+> ```
 
 ---
 
@@ -62,16 +63,14 @@ npm install
 ### Paso 3: Configurar variables de entorno
 
 ```bash
-# Backend
-cd backend
-cp .env.example .env
-# Editar .env si es necesario (por defecto ya funciona en local)
+# Backend — copiar el template (ya funciona con valores por defecto en local)
+cp backend/.env.example backend/.env
 
-# Frontend
-cd ../frontend
-cp .env.example .env.local
-# Solo necesitás cambiar NEXT_PUBLIC_API_URL si el backend corre en otro puerto
+# Frontend — copiar el template
+cp frontend/.env.example frontend/.env.local
 ```
+
+Solo necesitás editar si cambiás puertos o usás MongoDB/Ollama en otro host.
 
 ### Paso 4: Cargar datos de prueba (seed)
 
@@ -268,8 +267,7 @@ agente-challenge/
 ├── backend/
 │   ├── src/
 │   │   ├── agent/
-│   │   │   ├── graph.ts        → LangGraph agent
-│   │   │   └── tools.ts        → LangChain tools
+│   │   │   └── graph.ts        → LangGraph agent + tools del carrito
 │   │   ├── models/
 │   │   │   ├── Product.ts
 │   │   │   ├── Cart.ts
@@ -291,8 +289,8 @@ agente-challenge/
 │   │   │   └── seed.ts         → 30 productos + config default
 │   │   ├── db.ts               → Conexión MongoDB
 │   │   └── index.ts            → Express + health endpoints
-│   ├── .env
-│   ├── .env.example
+│   ├── .env              ← copiado de .env.example (no commitear)
+│   ├── .env.example      ← template versionado
 │   ├── package.json
 │   └── tsconfig.json
 │
@@ -305,15 +303,15 @@ agente-challenge/
 │   │   │   ├── layout.tsx
 │   │   │   └── globals.css
 │   │   ├── components/
-│   │   │   ├── ChatPlayground.tsx
-│   │   │   ├── CartPanel.tsx
-│   │   │   └── TracePanel.tsx
+│   │   │   ├── ChatPlayground.tsx → chat + streaming SSE
+│   │   │   ├── CartPanel.tsx      → panel del carrito
+│   │   │   └── TracePanel.tsx     → trazas del agente
 │   │   ├── lib/
-│   │   │   └── api.ts          → Funciones API
+│   │   │   └── api.ts          → funciones API + SSE stream
 │   │   └── types/
-│   │       └── index.ts        → TypeScript interfaces
-│   ├── .env.local
-│   ├── .env.example
+│   │       └── index.ts        → interfaces TypeScript
+│   ├── .env.local        ← copiado de .env.example (no commitear)
+│   ├── .env.example      ← template versionado
 │   ├── next.config.js
 │   ├── tailwind.config.js
 │   ├── package.json
@@ -355,14 +353,17 @@ agente-challenge/
 La carpeta `tests/` incluye una suite PowerShell que verifica todos los endpoints:
 
 ```powershell
-# Una sola iteración (verificación rápida ~1 min)
-.\tests\overnight.ps1 -Iterations 1
+# Configurar permisos de ejecución (una sola vez)
+Set-ExecutionPolicy Bypass -Scope Process -Force
 
-# Toda la noche (default: 10 horas, cada 5 minutos)
-.\tests\overnight.ps1
+# Una sola pasada completa de tests (~30 segundos)
+.\tests\run-tests.ps1 -Iterations 1
+
+# Monitoreo continuo toda la noche (default: 10 horas, cada 5 minutos)
+.\tests\run-tests.ps1
 
 # Personalizado
-.\tests\overnight.ps1 -MaxHours 8 -DelayMinutes 10
+.\tests\run-tests.ps1 -MaxHours 8 -DelayMinutes 10
 ```
 
 Al finalizar se generan en `tests/`:
@@ -377,10 +378,17 @@ Los tests que requieren Ollama se marcan como ⚠️ SKIP si no está disponible
 ## 🐛 Troubleshooting
 
 **El agente responde "No puedo conectarme a Ollama"**
-- Asegurate de que Ollama esté corriendo: `ollama serve`
-- Verificá que el modelo esté descargado: `ollama list`
+- Con Docker: `docker start ollama` para arrancar el contenedor
+- Verificá que el contenedor esté corriendo: `docker ps | findstr ollama`
+- Verificá que el modelo esté descargado: `docker exec ollama ollama list`
+- Sin Docker: asegurate de tener `ollama serve` corriendo en otra terminal
 - El modelo en `.env` debe coincidir con el descargado: `OLLAMA_MODEL=llama3.1`
 - El modelo debe soportar tool-calling (llama3.1, llama3.2, mistral-nemo, etc.)
+
+**La primera respuesta tarda mucho (>1 minuto)**
+- Normal en CPU pura — llama3.1 tarda 60-120 segundos la primera vez
+- Las siguientes respuestas de la misma sesión son más rápidas
+- Para mayor velocidad: usar GPU o reemplazar por `llama3.2:1b` (más liviano)
 
 **Error de conexión a MongoDB**
 - Verificá que MongoDB esté corriendo

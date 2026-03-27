@@ -24,9 +24,17 @@ router.get('/', async (_req: Request, res: Response) => {
 router.put('/', async (req: Request, res: Response) => {
   try {
     const { systemPrompt, tono, objetivos, reglas, catalogoActivo, temperature } = req.body;
+    // Solo incluir en $set los campos que vienen en el body (evita borrar con undefined)
+    const update: Record<string, unknown> = {};
+    if (systemPrompt !== undefined) update.systemPrompt = systemPrompt;
+    if (tono !== undefined) update.tono = tono;
+    if (objetivos !== undefined) update.objetivos = objetivos;
+    if (reglas !== undefined) update.reglas = reglas;
+    if (catalogoActivo !== undefined) update.catalogoActivo = catalogoActivo;
+    if (temperature !== undefined) update.temperature = temperature;
     const config = await AgentConfig.findOneAndUpdate(
       {},
-      { systemPrompt, tono, objetivos, reglas, catalogoActivo, temperature },
+      { $set: update },
       { new: true, upsert: true }
     );
     invalidateAgentCache(); // forzar reload en el próximo request
