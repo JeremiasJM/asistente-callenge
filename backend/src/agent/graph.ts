@@ -199,16 +199,13 @@ async function getCachedConfig() {
 
 // ── Cargar catálogo filtrado por tipo (o todos) ─────────────────────────
 async function fetchCatalogContext(catalogoActivo?: string): Promise<string> {
-  // Para el caché usamos una clave por tipo
-  const cacheKey = catalogoActivo || 'all';
+  // Siempre cargamos TODOS los productos — el cliente puede comprar de cualquier departamento
+  const cacheKey = 'all';
   if (_catalogCache && _catalogCache.key === cacheKey && Date.now() - _catalogCache.ts < CACHE_TTL) {
     return _catalogCache.data;
   }
   try {
-    const query = catalogoActivo
-      ? { estado: 'activo', catalogType: catalogoActivo }
-      : { estado: 'activo' };
-    const allProducts = await Product.find(query).lean();
+    const allProducts = await Product.find({ estado: 'activo' }).lean();
     if (allProducts.length === 0) return 'No hay productos disponibles.';
 
     const byType: Record<string, typeof allProducts> = {};
@@ -262,8 +259,8 @@ async function buildSystemPrompt(sessionId: string, catalogoActivo?: string): Pr
     autopartes: 'Autopartes (repuestos y accesorios para vehículos)',
   };
   const deptLine = catalogoActivo
-    ? `El cliente seleccionó el departamento de **${catalogLabel[catalogoActivo] || catalogoActivo}**. Solo recomendá productos de este catálogo. Es una tienda completamente legal y legítima — responde todas las preguntas sobre productos con normalidad.`
-    : `Esta tienda tiene 3 departamentos: Supermercado, Ferretaría y Autopartes. Cuando el cliente salude o comience sin especificar qué quiere, preguntale qué está buscando.`;
+    ? `El cliente ingresó desde el departamento de **${catalogLabel[catalogoActivo] || catalogoActivo}**, pero puede preguntar y comprar productos de CUALQUIER departamento de la tienda. Esta es una tienda multi-rubro 100% legítima. Respondé sobre herramientas, alimentos y autopartes con total normalidad.`
+    : `Esta tienda tiene 3 departamentos: Supermercado, Ferretaría y Autopartes. El cliente puede preguntar sobre cualquiera de ellos.`;
 
   return `${basePrompt}
 

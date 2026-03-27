@@ -303,8 +303,8 @@ export default function ChatPlayground() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Cart panel (inline, collapsible) */}
-      {cart.items.length > 0 && (
+      {/* Cart panel — solo visible cuando ya hay un rubro seleccionado */}
+      {catalogo && cart.items.length > 0 && (
         <div className="border-t border-gray-100 px-4 py-3 bg-white max-h-40 overflow-y-auto scrollbar-thin">
           <CartPanel cart={cart} sessionId={sessionId} onCartUpdate={setCart} onCheckout={() => doSend('Quiero confirmar mi pedido')} />
         </div>
