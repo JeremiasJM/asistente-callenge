@@ -10,6 +10,8 @@ interface CartPanelProps {
 }
 
 export default function CartPanel({ cart, sessionId, onCartUpdate, onCheckout }: CartPanelProps) {
+  // Siempre recalcular el total desde los items como fuente de verdad
+  const displayTotal = cart.items.reduce((s, i) => s + i.subtotal, 0);
   const handleRemove = async (item: CartItem) => {
     try {
       const result = await removeFromCart(sessionId, item.productId, 1);
@@ -85,7 +87,7 @@ export default function CartPanel({ cart, sessionId, onCartUpdate, onCheckout }:
           <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
             <div className="flex justify-between items-center mb-3">
               <span className="font-semibold text-gray-700 text-sm">Total</span>
-              <span className="font-bold text-lg text-brand-dark">{formatPrice(cart.total)}</span>
+              <span className="font-bold text-lg text-brand-dark">{formatPrice(displayTotal)}</span>
             </div>
             {onCheckout && (
               <button

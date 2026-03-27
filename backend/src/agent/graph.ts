@@ -24,6 +24,21 @@ export interface AgentResult {
 }
 
 // ── Tools de carrito (con sessionId cerrado en closure) ────────────────────
+// ── Serializa operaciones del carrito por sesión para evitar race conditions ─
+// LangGraph ejecuta múltiples tool_calls en paralelo (Promise.all). Sin este
+// lock, dos addToCart simultáneos leen el mismo cart y uno pisa al otro.
+const cartLocks = new Map<string, Promise<void>>();
+function withCartLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = cartLocks.get(sessionId) ?? Promise.resolve();
+  let resolve!: () => void;
+  const next = new Promise<void>((r) => { resolve = r; });
+  cartLocks.set(sessionId, next);
+  return prev.then(() => fn()).finally(() => {
+    resolve();
+    if (cartLocks.get(sessionId) === next) cartLocks.delete(sessionId);
+  });
+}
+
 function buildCartTools(sessionId: string) {
   const addToCart = new DynamicStructuredTool({
     name: 'addToCart',
@@ -32,43 +47,44 @@ function buildCartTools(sessionId: string) {
       productId: z.string().describe('El campo _id exacto del producto que aparece en el catálogo del system prompt'),
       quantity: z.number().min(1).default(1).describe('Cantidad a agregar'),
     }),
-    func: async ({ productId, quantity }: { productId: string; quantity: number }) => {
-      try {
-        const product = await Product.findById(productId);
-        if (!product) return JSON.stringify({ success: false, message: 'Producto no encontrado. Verificá el ID.' });
-        if (product.estado !== 'activo') return JSON.stringify({ success: false, message: 'Producto no disponible actualmente.' });
+    func: ({ productId, quantity }: { productId: string; quantity: number }) =>
+      withCartLock(sessionId, async () => {
+        try {
+          const product = await Product.findById(productId);
+          if (!product) return JSON.stringify({ success: false, message: 'Producto no encontrado. Verificá el ID.' });
+          if (product.estado !== 'activo') return JSON.stringify({ success: false, message: 'Producto no disponible actualmente.' });
 
-        let cart = await Cart.findOne({ sessionId });
-        if (!cart) cart = new Cart({ sessionId, items: [], total: 0 });
+          let cart = await Cart.findOne({ sessionId });
+          if (!cart) cart = new Cart({ sessionId, items: [], total: 0 });
 
-        const idx = cart.items.findIndex((i) => i.productId.toString() === productId);
-        const existingQty = idx >= 0 ? cart.items[idx].cantidad : 0;
-        if (existingQty + quantity > product.stock) {
-          return JSON.stringify({ success: false, message: `Stock insuficiente. Solo quedan ${product.stock - existingQty} unidades disponibles.` });
-        }
+          const idx = cart.items.findIndex((i) => i.productId.toString() === productId);
+          const existingQty = idx >= 0 ? cart.items[idx].cantidad : 0;
+          if (existingQty + quantity > product.stock) {
+            return JSON.stringify({ success: false, message: `Stock insuficiente. Solo quedan ${product.stock - existingQty} unidades disponibles.` });
+          }
 
-        if (idx >= 0) {
-          cart.items[idx].cantidad += quantity;
-          cart.items[idx].subtotal = cart.items[idx].precio * cart.items[idx].cantidad;
-        } else {
-          cart.items.push({
-            productId: new mongoose.Types.ObjectId(productId),
-            nombre: product.nombre,
-            precio: product.precio,
-            cantidad: quantity,
-            subtotal: product.precio * quantity,
+          if (idx >= 0) {
+            cart.items[idx].cantidad += quantity;
+            cart.items[idx].subtotal = cart.items[idx].precio * cart.items[idx].cantidad;
+          } else {
+            cart.items.push({
+              productId: new mongoose.Types.ObjectId(productId),
+              nombre: product.nombre,
+              precio: product.precio,
+              cantidad: quantity,
+              subtotal: product.precio * quantity,
+            });
+          }
+          cart.total = cart.items.reduce((s, i) => s + i.subtotal, 0);
+          await cart.save();
+          return JSON.stringify({
+            success: true,
+            message: `✅ ${quantity}x "${product.nombre}" agregado. Subtotal: $${product.precio * quantity}`,
           });
+        } catch (e) {
+          return JSON.stringify({ success: false, error: String(e) });
         }
-        cart.total = cart.items.reduce((s, i) => s + i.subtotal, 0);
-        await cart.save();
-        return JSON.stringify({
-          success: true,
-          message: `✅ ${quantity}x "${product.nombre}" agregado. Subtotal: $${product.precio * quantity}`,
-        });
-      } catch (e) {
-        return JSON.stringify({ success: false, error: String(e) });
-      }
-    },
+      }),
   });
 
   const removeFromCart = new DynamicStructuredTool({
@@ -78,26 +94,27 @@ function buildCartTools(sessionId: string) {
       productId: z.string().describe('El _id del producto a quitar'),
       quantity: z.number().min(1).default(1).describe('Cantidad a quitar'),
     }),
-    func: async ({ productId, quantity }: { productId: string; quantity: number }) => {
-      try {
-        const cart = await Cart.findOne({ sessionId });
-        if (!cart) return JSON.stringify({ success: false, message: 'El carrito está vacío.' });
-        const idx = cart.items.findIndex((i) => i.productId.toString() === productId);
-        if (idx < 0) return JSON.stringify({ success: false, message: 'Producto no está en el carrito.' });
-        const nombre = cart.items[idx].nombre;
-        if (cart.items[idx].cantidad <= quantity) {
-          cart.items.splice(idx, 1);
-        } else {
-          cart.items[idx].cantidad -= quantity;
-          cart.items[idx].subtotal = cart.items[idx].precio * cart.items[idx].cantidad;
+    func: ({ productId, quantity }: { productId: string; quantity: number }) =>
+      withCartLock(sessionId, async () => {
+        try {
+          const cart = await Cart.findOne({ sessionId });
+          if (!cart) return JSON.stringify({ success: false, message: 'El carrito está vacío.' });
+          const idx = cart.items.findIndex((i) => i.productId.toString() === productId);
+          if (idx < 0) return JSON.stringify({ success: false, message: 'Producto no está en el carrito.' });
+          const nombre = cart.items[idx].nombre;
+          if (cart.items[idx].cantidad <= quantity) {
+            cart.items.splice(idx, 1);
+          } else {
+            cart.items[idx].cantidad -= quantity;
+            cart.items[idx].subtotal = cart.items[idx].precio * cart.items[idx].cantidad;
+          }
+          cart.total = cart.items.reduce((s, i) => s + i.subtotal, 0);
+          await cart.save();
+          return JSON.stringify({ success: true, message: `"${nombre}" quitado del carrito.` });
+        } catch (e) {
+          return JSON.stringify({ success: false, error: String(e) });
         }
-        cart.total = cart.items.reduce((s, i) => s + i.subtotal, 0);
-        await cart.save();
-        return JSON.stringify({ success: true, message: `"${nombre}" quitado del carrito.` });
-      } catch (e) {
-        return JSON.stringify({ success: false, error: String(e) });
-      }
-    },
+      }),
   });
 
   const getCart = new DynamicStructuredTool({
