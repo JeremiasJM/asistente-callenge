@@ -252,9 +252,10 @@ INSTRUCCIONES OBLIGATORIAS — LEELAS COMPLETAS ANTES DE RESPONDER:
 
 1. IDIOMA: Responde SIEMPRE en español, con lenguaje natural y conversacional.
 2. FORMATO: NUNCA escribas JSON, bloques de código, arrays ni datos técnicos en tu respuesta. Las llamadas a herramientas son invisibles para el cliente — él solo ve tu texto.
-3. PERSONALIDAD: ${tonoDesc[tono] || tonoDesc.amigable}
-4. OBJETIVOS: ${objetivos}
-5. REGLAS DE NEGOCIO: ${reglas}
+3. PENSAMIENTO INTERNO: NUNCA escribas frases como "No necesito llamar a ninguna función", "Como no hay una función", "Puedo simplemente enumerar", "Sin embargo si necesito llamar...", ni ninguna otra reflexión sobre herramientas o procesos internos. SOLO escribe el mensaje para el cliente.
+4. PERSONALIDAD: ${tonoDesc[tono] || tonoDesc.amigable}
+5. OBJETIVOS: ${objetivos}
+6. REGLAS DE NEGOCIO: ${reglas}
 
 ${deptLine}
 
@@ -283,8 +284,11 @@ EJEMPLO CORRECTO — así debes responder:
 Cliente: "¿Qué aceites tienen?"
 Respuesta correcta: "¡Hola! Tenemos aceite de girasol 1.5L a $890 y aceite de oliva extra virgen 500ml a $2.100. ¿Te puedo agregar alguno?"
 
-EJEMPLO INCORRECTO — NUNCA hagas esto:
-{"name": "getProductInfo", "parameters": {"productId": "..."}}  <- PROHIBIDO, esto no es una herramienta disponible`;
+EJEMPLOS INCORRECTOS — NUNCA hagas esto:
+❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
+❌ "No necesito llamar a ninguna función para responder..."  <- pensamiento interno prohibido
+❌ "Sin embargo, si necesito llamar a una función..."  <- pensamiento interno prohibido
+❌ "Como no hay una función específica llamada..."  <- pensamiento interno prohibido`;
 }
 
 // ── Limpia respuestas con JSON hallucination del modelo ──────────────────
@@ -293,12 +297,30 @@ function sanitizeResponse(text: string): string {
 
   let result = text.trim();
 
-  // Si la respuesta ES solo JSON de tool-call → descartar todo
-  // Detecta si empieza con { y contiene "name" y "get" (hallucination patrón)
+  // ── Limpiar monólogo interno del modelo ─────────────────────────────────
+  // llama3.1 expone razonamiento interno o disculpas meta antes de la respuesta real
+  const internalThoughtPatterns = [
+    // Frases meta de una línea al inicio (seguidas de salto de línea)
+    /^[^\n]*(no necesito llamar|no hay una función|puedo simplemente|no es necesario llamar)[^\n]*\n+/gi,
+    /^[^\n]*(como (no hay|la pregunta|se trata))[^\n]*\n+/gi,
+    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad))[^\n]*\n+/gi,
+    /^[^\n]*(sin embargo[^,\n]*puedo ayudarte)[^\n]*\n+/gi,
+    /^[^\n]*(entiendo (que|tu)|comprendo)[^\n]*(pero|sin embargo)[^\n]*\n+/gi,
+    // Bloque al final con "sin embargo si necesito llamar..."
+    /\n[^\n]*(sin embargo|however),?\s*(si (necesito|hay que) llamar)[^\n]*[:\n][^]*$/gi,
+    /\n[^\n]*(si (fuera necesario|necesitara))[^\n]*[:\n][^]*\}[^}]*$/gi,
+  ];
+  for (const pat of internalThoughtPatterns) {
+    result = result.replace(pat, '');
+  }
+
+  // Eliminar comillas que rodean toda la respuesta (el modelo a veces cita su propia respuesta)
+  result = result.replace(/^"([\s\S]+)"$/, '$1').trim();
+
+  // ── Eliminar fragmentos JSON sueltos (hallucination) ─────────────────────
+  // Si arranca con JSON de tool-call → intentar extraer el texto natural
   if (result.startsWith('{') && /"name"\s*:\s*"get/.test(result)) {
-    // Intentar extraer cualquier texto narrative en español que quede después del JSON
     const afterJson = result.replace(/^\{[^]*?\}\s*/m, '').trim();
-    // Eliminar notas entre paréntesis sobre herramientas
     const cleaned = afterJson
       .replace(/\([^)]*herramienta[^)]*\)/gi, '')
       .replace(/\([^)]*tool[^)]*\)/gi, '')
@@ -306,14 +328,16 @@ function sanitizeResponse(text: string): string {
       .replace(/\([^)]*llama a[^)]*\)/gi, '')
       .replace(/\([^)]*anterior[^)]*\)/gi, '')
       .trim();
-    // Si no quedó nada útil → string vacío (el caller usará fallback)
     return cleaned.length > 10 ? cleaned : '';
   }
 
-  // Si tiene JSON embebido en medio del texto → eliminarlo
+  // JSON embebido en medio del texto
   result = result.replace(/\{[^]*?"name"\s*:\s*"get[^"]*"[^]*?\}/g, '');
 
-  // Eliminar notas sobre herramientas entre paréntesis
+  // Llaves o corchetes sueltos al final (residuos de JSON)
+  result = result.replace(/[\s\n]*[}\]]+\s*$/g, '');
+
+  // Notas internas entre paréntesis
   result = result
     .replace(/\([^)]*herramienta[^)]*\)/gi, '')
     .replace(/\([^)]*tool[^)]*\)/gi, '')
