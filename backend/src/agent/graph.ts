@@ -306,7 +306,9 @@ function sanitizeResponse(text: string): string {
     // Frases meta de una línea al inicio (seguidas de salto de línea)
     /^[^\n]*(no necesito llamar|no hay una función|puedo simplemente|no es necesario llamar)[^\n]*\n+/gi,
     /^[^\n]*(como (no hay|la pregunta|se trata))[^\n]*\n+/gi,
-    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad))[^\n]*\n+/gi,
+    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad|JSON|formato|respuesta|natural|proporcion))[^\n]*\n+/gi,
+    /^[^\n]*(lo sient[ao],?\s*(pero|lamentablemente)[^\n]*(no puedo|no tengo|no soy))[^\n]*\n+/gi,
+    /^[^\n]*(sin embargo[^,\n]*(puedo ayudarte|podría ayudarte|te puedo))[^\n]*\n+/gi,
     /^[^\n]*(sin embargo[^,\n]*puedo ayudarte)[^\n]*\n+/gi,
     /^[^\n]*(entiendo (que|tu)|comprendo)[^\n]*(pero|sin embargo)[^\n]*\n+/gi,
     // Bloque al final con "sin embargo si necesito llamar..."
