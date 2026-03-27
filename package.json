@@ -1,0 +1,12 @@
+{
+  "name": "agente-challenge",
+  "version": "1.0.0",
+  "description": "MVP Agente Conversacional de Ventas",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "seed": "cd backend && npm run seed",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "start cmd /k \"cd backend && npm run dev\" && start cmd /k \"cd frontend && npm run dev\""
+  }
+}
