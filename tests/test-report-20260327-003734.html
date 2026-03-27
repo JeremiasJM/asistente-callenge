@@ -1,0 +1,58 @@
+﻿<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<title>Test Report - Agente Ventas AI</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;padding:24px}
+h1{color:#c3f53c;margin-bottom:4px}
+.sub{color:#64748b;font-size:13px;margin-bottom:24px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:28px}
+.stat{background:#1e2335;border-radius:12px;padding:16px 20px}
+.stat .n{font-size:2.2em;font-weight:700}
+.stat .l{font-size:12px;color:#94a3b8}
+.gn{color:#4ade80}.rn{color:#f87171}.yn{color:#facc15}.bn{color:#60a5fa}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#1e2335;color:#94a3b8;padding:10px 12px;text-align:left;font-weight:600}
+td{padding:8px 12px;border-bottom:1px solid #1e2335;vertical-align:top}
+tr:hover td{background:#1a1f2e}
+.m{font-family:monospace;font-size:12px}
+.p,.f,.s{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:700}
+.p{background:#14532d;color:#4ade80}.f{background:#7f1d1d;color:#f87171}.s{background:#713f12;color:#facc15}
+.e{color:#f87171;display:block;margin-top:3px;word-break:break-all;max-width:400px}
+.bw{background:#1e2335;border-radius:99px;height:10px;margin:16px 0 24px;overflow:hidden}
+.bf{height:100%;background:linear-gradient(90deg,#4ade80,#c3f53c);border-radius:99px}
+</style></head><body>
+<h1>Agente Ventas AI - Test Report</h1>
+<p class="sub">Generado: 2026-03-27 00:37:34 | Duracion: 0 min | Iteraciones: 1</p>
+<div class="stats">
+  <div class="stat"><div class="n bn">23</div><div class="l">Tests ejecutados</div></div>
+  <div class="stat"><div class="n gn">16</div><div class="l">Pasaron (PASS)</div></div>
+  <div class="stat"><div class="n rn">7</div><div class="l">Fallaron (FAIL)</div></div>
+  <div class="stat"><div class="n yn">0</div><div class="l">Omitidos (SKIP)</div></div>
+  <div class="stat"><div class="n gn">69.6%</div><div class="l">Tasa de exito</div></div>
+</div>
+<div class="bw"><div class="bf" style="width:69.6%"></div></div>
+<table><thead><tr><th>Run</th><th>Hora</th><th>Metodo</th><th>Test</th><th>HTTP</th><th>Tiempo</th><th>Estado</th></tr></thead>
+<tbody><tr><td>1</td><td>2026-03-27 00:37:23</td><td class='m'>GET</td><td>GET /api/health -> 200 + mongodb:connected</td><td class='m'>200</td><td>15ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/health/ollama -> responde (200 o 503)</td><td class='m'>200</td><td>10ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/ruta-inexistente -> debe devolver 404</td><td class='m'></td><td>6ms</td><td><span class="f">FAIL</span> <small class='e'>Error en el servidor remoto: (404) No se encontr&#243;.</small></td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/config -> 200 con campos</td><td class='m'>200</td><td>11ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>PUT</td><td>PUT /api/config -> temperatura 0.3</td><td class='m'>200</td><td>31ms</td><td><span class="f">FAIL</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>PUT</td><td>PUT /api/config -> restaura temperatura 0.1</td><td class='m'>200</td><td>9ms</td><td><span class="f">FAIL</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/catalog/supermercado/search?q=a -> tiene productos</td><td class='m'>200</td><td>10ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/catalog/ferreteria/search?q=a -> tiene productos</td><td class='m'>200</td><td>9ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/catalog/autopartes/search?q=a -> tiene productos</td><td class='m'>200</td><td>9ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/catalog/supermercado/search?q=xq9z8w7 -> vacio</td><td class='m'>200</td><td>9ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/catalog/tipo-invalido -> error controlado (no crash)</td><td class='m'>200</td><td>9ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/cart/test-auto-003723-r1 -> carrito vacio</td><td class='m'>200</td><td>8ms</td><td><span class="f">FAIL</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>POST</td><td>POST /api/cart/add -> agrega producto valido</td><td class='m'></td><td>3ms</td><td><span class="f">FAIL</span> <small class='e'>Error en el servidor remoto: (500) Error interno del servidor.</small></td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/cart/test-auto-003723-r1 -> total > 0 despues de agregar</td><td class='m'>200</td><td>9ms</td><td><span class="f">FAIL</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>POST</td><td>POST /api/cart/remove -> quita 1 unidad</td><td class='m'></td><td>3ms</td><td><span class="f">FAIL</span> <small class='e'>Error en el servidor remoto: (404) No se encontr&#243;.</small></td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>DELETE</td><td>DELETE /api/cart/test-auto-003723-r1 -> vacia carrito</td><td class='m'>200</td><td>9ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/cart/test-auto-003723-r1 -> vacio despues de delete</td><td class='m'>200</td><td>8ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/chat/test-auto-003723-r1 -> historial (puede vacio)</td><td class='m'>200</td><td>10ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>DELETE</td><td>DELETE /api/chat/test-auto-003723-r1 -> elimina historial</td><td class='m'>200</td><td>8ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/orders/test-auto-003723-r1 -> array (puede vacio)</td><td class='m'>200</td><td>9ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>GET</td><td>GET /api/orders -> listado admin</td><td class='m'>200</td><td>8ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:24</td><td class='m'>POST</td><td>POST /api/chat -> responde (cualquier respuesta sin crash)</td><td class='m'>200</td><td>8480ms</td><td><span class="p">PASS</span> </td></tr>
+<tr><td>1</td><td>2026-03-27 00:37:32</td><td class='m'>POST</td><td>POST /api/chat -> error Ollama devuelve mensaje amigable (no 500)</td><td class='m'>200</td><td>1712ms</td><td><span class="p">PASS</span> </td></tr></tbody></table>
+</body></html>

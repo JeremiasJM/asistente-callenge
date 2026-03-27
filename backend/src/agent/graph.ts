@@ -308,6 +308,14 @@ export async function createAgentGraph(sessionId: string, catalogoActivo?: strin
   return { graph, sessionId };
 }
 
+// ── Timeout helper ────────────────────────────────────────────────────────
+const AGENT_TIMEOUT_MS = 120_000; // 2 minutos máximo por llamada a Ollama
+function rejectAfter(ms: number, label = 'timeout'): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`${label}: exceeded ${ms}ms`)), ms)
+  );
+}
+
 // ── Ejecutar el agente y capturar trazas ──────────────────────────────────
 export async function runAgent(
   userMessage: string,
@@ -326,38 +334,47 @@ export async function runAgent(
 
     const inputMessages = [...historyMessages, new HumanMessage(userMessage)];
 
-    const stream = await graph.stream(
-      { messages: inputMessages },
-      { streamMode: 'values' }
-    );
+    // Timeout: si Ollama no responde en 2 min, falla limpiamente
+    const runWithTimeout = async () => {
+      const stream = await graph.stream(
+        { messages: inputMessages },
+        { streamMode: 'values' }
+      );
 
-    let finalResponse = '';
+      let finalResponse = '';
 
-    for await (const state of stream) {
-      const lastMessage = state.messages[state.messages.length - 1];
+      for await (const state of stream) {
+        const lastMessage = state.messages[state.messages.length - 1];
 
-      if (lastMessage._getType() === 'tool') {
-        const toolMsg = lastMessage as { name?: string; content: string };
-        const prevMsg = state.messages[state.messages.length - 2] as AIMessage;
-        const toolCall = prevMsg.tool_calls?.[0];
-        traces.push({
-          tool: toolMsg.name || toolCall?.name || 'unknown',
-          input: (toolCall?.args as Record<string, unknown>) || {},
-          output: (() => {
-            try { return JSON.parse(toolMsg.content) as Record<string, unknown>; }
-            catch { return { result: toolMsg.content }; }
-          })(),
-          duration: 0,
-        });
-      }
+        if (lastMessage._getType() === 'tool') {
+          const toolMsg = lastMessage as { name?: string; content: string };
+          const prevMsg = state.messages[state.messages.length - 2] as AIMessage;
+          const toolCall = prevMsg.tool_calls?.[0];
+          traces.push({
+            tool: toolMsg.name || toolCall?.name || 'unknown',
+            input: (toolCall?.args as Record<string, unknown>) || {},
+            output: (() => {
+              try { return JSON.parse(toolMsg.content) as Record<string, unknown>; }
+              catch { return { result: toolMsg.content }; }
+            })(),
+            duration: 0,
+          });
+        }
 
-      if (lastMessage._getType() === 'ai') {
-        const aiMsg = lastMessage as AIMessage;
-        if (typeof aiMsg.content === 'string' && aiMsg.content.trim()) {
-          finalResponse = aiMsg.content;
+        if (lastMessage._getType() === 'ai') {
+          const aiMsg = lastMessage as AIMessage;
+          if (typeof aiMsg.content === 'string' && aiMsg.content.trim()) {
+            finalResponse = aiMsg.content;
+          }
         }
       }
-    }
+      return finalResponse;
+    };
+
+    const finalResponse = await Promise.race([
+      runWithTimeout(),
+      rejectAfter(AGENT_TIMEOUT_MS, 'Ollama timeout'),
+    ]);
 
     return { response: finalResponse || '¿En qué más puedo ayudarte?', traces };
   } catch (error) {
@@ -366,6 +383,12 @@ export async function runAgent(
     if (errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch')) {
       return {
         response: '⚠️ No puedo conectarme a Ollama. Ejecutá: `ollama serve` y luego: `ollama pull llama3.1`',
+        traces,
+      };
+    }
+    if (errMsg.includes('timeout')) {
+      return {
+        response: '⚠️ Ollama tardó demasiado en responder (> 2 min). Verificá que el modelo esté cargado.',
         traces,
       };
     }
@@ -428,10 +451,14 @@ export async function* runAgentStream(
     yield { type: 'done', response: fullResponse || '¿En qué más puedo ayudarte?', traces };
   } catch (error) {
     const errMsg = String(error);
-    const humanError =
-      errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch')
-        ? '⚠️ No puedo conectarme a Ollama. Ejecutá: `ollama serve` y luego: `ollama pull llama3.1`'
-        : 'Ocurrió un error procesando tu mensaje. Por favor intentá de nuevo.';
+    let humanError: string;
+    if (errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch')) {
+      humanError = '⚠️ No puedo conectarme a Ollama. Ejecutá: `ollama serve` y luego: `ollama pull llama3.1`';
+    } else if (errMsg.includes('timeout')) {
+      humanError = '⚠️ Ollama tardó demasiado en responder (> 2 min). Verificá que el modelo esté cargado.';
+    } else {
+      humanError = 'Ocurrió un error procesando tu mensaje. Por favor intentá de nuevo.';
+    }
     yield { type: 'done', response: humanError, traces };
   }
 }
