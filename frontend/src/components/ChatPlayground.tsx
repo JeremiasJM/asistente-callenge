@@ -253,7 +253,7 @@ export default function ChatPlayground() {
                   {activeCatalog?.suggestions.map((q) => (
                     <button
                       key={q}
-                      onClick={() => setInput(q)}
+                      onClick={() => doSend(q)}
                       className="text-xs bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-3 py-2 text-gray-600 text-left transition-colors"
                     >
                       {q}
