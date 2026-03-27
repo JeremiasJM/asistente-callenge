@@ -314,6 +314,7 @@ Respuesta correcta: "Tenemos Aceite Motor 5W30 Sintético 4L a $12.500 y Líquid
 
 EJEMPLOS INCORRECTOS — NUNCA hagas esto:
 ❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
+❌ "No puedo llamar a ninguna función para responder a esta pregunta. Puedo describir los productos..."  <- pensamiento interno prohibido
 ❌ "No necesito llamar a ninguna función para responder..."  <- pensamiento interno prohibido
 ❌ "No hay necesidad de llamar a ninguna función para responder a esta pregunta."  <- pensamiento interno prohibido
 ❌ "Sin embargo, si necesito llamar a una función..."  <- pensamiento interno prohibido
@@ -331,8 +332,15 @@ function sanitizeResponse(text: string): string {
   // ── Limpiar monólogo interno del modelo ─────────────────────────────────
   // llama3.1 expone razonamiento interno o disculpas meta antes de la respuesta real
   const internalThoughtPatterns = [
-    // Frases meta de una línea al inicio (seguidas de salto de línea)
-    /^[^\n]*(no necesito llamar|no hay una función|puedo simplemente|no es necesario llamar)[^\n]*\n+/gi,
+    // Patrón amplio: cualquier oración que mencione 'llamar/función/herramienta' en contexto meta
+    /^[^\n]*(no (necesito|puedo|debo|hay que|hay necesidad de|es necesario|se necesita)) llamar[^\n]*\n+/gi,
+    /^[^\n]*(no (necesito|puedo|debo)) (usar|utilizar|invocar|ejecutar)[^\n]*(función|herramienta|tool)[^\n]*\n+/gi,
+    /^[^\n]*(llamar a (ninguna|una|la|alguna) función)[^\n]*\n+/gi,
+    // "Puedo describir/listar los productos..." — frase meta de capacidad
+    /^[^\n]*(puedo (describir|listar|enumerar|mencionar)[^\n]*(productos|catálogo|disponibles|repuestos|herramientas|autopartes|supermercado|ferretería))[^\n]*\n+/gi,
+    /^[^\n]*(puedo (simplemente|directamente|sólo|solo) (describir|listar|enumerar|responder|decirte))[^\n]*\n+/gi,
+    // Variantes anteriores
+    /^[^\n]*(no necesito llamar|no hay una función|no es necesario llamar)[^\n]*\n+/gi,
     /^[^\n]*(como (no hay|la pregunta|se trata))[^\n]*\n+/gi,
     /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad|JSON|formato|proporcion|asistencia|ilegales|dañinas|contenido relacionado|política))[^\n]*\n+/gi,
     /^[^\n]*(lo sient[ao],?\s*(pero|lamentablemente)?[^\n]*(no puedo|no soy|no estoy)[^\n]*(proporcion|asistir|brind|facilit|ayud.*activ|ayud.*ilegal))[^\n]*\n+/gi,
@@ -357,9 +365,12 @@ function sanitizeResponse(text: string): string {
     // frases de rechazo con filtro de seguridad falso
     /[.\s]*no puedo proporcionar asistencia[^.]*\./gi,
     // frases de monólogo embebidas en cualquier posición
-    /[^.]*no hay necesidad de llamar[^.]*función[^.]*\.?\s*/gi,
-    /[^.]*no (es|hay) necesidad[^.]*(llamar|función|herramienta)[^.]*\.?\s*/gi,
-    /[^.]*no necesito llamar[^.]*(función|herramienta)[^.]*\.?\s*/gi,
+    /[^.\n]*no (puedo|necesito|debo) llamar a (ninguna|una|la|alguna) función[^.\n]*\.?\s*/gi,
+    /[^.\n]*llamar a (ninguna|una|la|alguna) función para responder[^.\n]*\.?\s*/gi,
+    /[^.\n]*(no (es|hay) necesidad|no es necesario)[^.\n]*(llamar|función|herramienta)[^.\n]*\.?\s*/gi,
+    /[^.\n]*no necesito llamar[^.\n]*(función|herramienta)[^.\n]*\.?\s*/gi,
+    /[^.\n]*puedo (describir|listar|mencionar) los productos[^.\n]*\.?\s*/gi,
+    /[^.\n]*puedo (describir|listar|mencionar) (el catálogo|los repuestos|las herramientas|los productos disponibles)[^.\n]*\.?\s*/gi,
     /[.\s]*no puedo (ayudar|asistir) con[^.]*(ilegales|dañinas|contenido|actividades)[^.]*\./gi,
     /[.\s]*esto (está|parece) fuera de (mi|mis)[^.]*\./gi,
     /[.\s]*no puedo proporcionar información sobre (herramientas|materiales|repuestos|productos|precios|características)[^.]*\./gi,
