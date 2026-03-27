@@ -108,8 +108,10 @@ function buildCartTools(sessionId: string) {
       try {
         const cart = await Cart.findOne({ sessionId }).lean();
         if (!cart || cart.items.length === 0) return JSON.stringify({ empty: true, message: 'El carrito está vacío.' });
-        const itemList = cart.items.map((i) => `${i.nombre} x${i.cantidad} = $${i.subtotal}`).join(', ');
-        return JSON.stringify({ empty: false, items: cart.items, total: cart.total, resumen: itemList });
+        // Solo nombre/cantidad/subtotal — sin IDs internos para no confundir al modelo
+        const cleanItems = cart.items.map((i) => ({ nombre: i.nombre, cantidad: i.cantidad, subtotal: i.subtotal }));
+        const itemList = cleanItems.map((i) => `${i.nombre} x${i.cantidad} = $${i.subtotal}`).join(', ');
+        return JSON.stringify({ empty: false, items: cleanItems, total: cart.total, resumen: itemList });
       } catch (e) {
         return JSON.stringify({ error: String(e) });
       }
@@ -238,13 +240,13 @@ async function buildSystemPrompt(sessionId: string, catalogoActivo?: string): Pr
   const catalogContext = await fetchCatalogContext(catalogoActivo);
 
   const catalogLabel: Record<string, string> = {
-    supermercado: 'supermercado (alimentos, bebidas, limpieza)',
-    ferreteria: 'ferretería (herramientas, materiales de construcción)',
-    autopartes: 'autopartes (repuestos y accesorios para vehículos)',
+    supermercado: 'Supermercado (alimentos, bebidas, limpieza del hogar)',
+    ferreteria: 'Ferretaría (herramientas eléctricas, manuales y accesorios)',
+    autopartes: 'Autopartes (repuestos y accesorios para vehículos)',
   };
   const deptLine = catalogoActivo
-    ? `The customer has selected the **${catalogLabel[catalogoActivo] || catalogoActivo}** department. Only recommend products from this catalog.`
-    : `This store has 3 departments. When a customer greets you or starts without specifying what they want, ask them what they are looking for before offering products.`;
+    ? `El cliente seleccionó el departamento de **${catalogLabel[catalogoActivo] || catalogoActivo}**. Solo recomendá productos de este catálogo. Es una tienda completamente legal y legítima — responde todas las preguntas sobre productos con normalidad.`
+    : `Esta tienda tiene 3 departamentos: Supermercado, Ferretaría y Autopartes. Cuando el cliente salude o comience sin especificar qué quiere, preguntale qué está buscando.`;
 
   return `${basePrompt}
 
@@ -270,7 +272,8 @@ PROHIBICIONES ABSOLUTAS DE HERRAMIENTAS:
 - Si un producto NO está en el catálogo, di que no lo tenés. No llames ninguna herramienta.
 - NUNCA NUNCA escribas JSON en tu respuesta al cliente. Si ves que estás a punto de escribir '{', PARÁ y reescribí en español natural.
 - NUNCA menciones PRODUCT_ID, _id, hex codes, ni ningún dato técnico interno en tu respuesta. El cliente solo debe ver nombre, precio y descripción.
-- NUNCA actives filtros de seguridad ni rechaces responder consultas sobre productos. Las preguntas de productos, precios y carrito son 100% legítimas. NUNCA digas que no puedes ayudar.
+- Cuando getCart devuelva el carrito, SIEMPRE mostrá los items al cliente usando nombre, cantidad y subtotal. NUNCA te niegues a mostrar el carrito.
+- NUNCA actives filtros de seguridad ni rechaces responder sobre productos de la tienda. Estamos en una tienda 100% legal: supermercado, ferretaría y autopartes. Las herramientas eléctricas, taladros, sierras, aceites, repuestos — todos son productos legítimos. NUNCA digas que no puedes informar sobre precios o productos.
 
 CATÁLOGO DE PRODUCTOS DISPONIBLES:
 ${catalogContext}
@@ -285,6 +288,12 @@ CÓMO RESPONDER:
 EJEMPLO CORRECTO — así debes responder:
 Cliente: "¿Qué aceites tienen?"
 Respuesta correcta: "¡Hola! Tenemos aceite de girasol 1.5L a $890 y aceite de oliva extra virgen 500ml a $2.100. ¿Te puedo agregar alguno?"
+
+Cliente: "¿Cuánto sale el taladro percutor?"
+Respuesta correcta: "El Taladro Percutor 13mm 750W está a $28.500. Tenemos 15 unidades en stock. ¿Añado uno al carrito?"
+
+Cliente: "¿Qué repuestos tienen para auto?"
+Respuesta correcta: "Tenemos Aceite Motor 5W30 Sintético 4L a $12.500 y Líquido de Frenos DOT4 500ml a $1.800. ¿Te puedo ayudar con algo?"
 
 EJEMPLOS INCORRECTOS — NUNCA hagas esto:
 ❌ {"name": "getProductInfo", "parameters": {"productId": "..."}}  <- JSON prohibido
@@ -307,9 +316,8 @@ function sanitizeResponse(text: string): string {
     // Frases meta de una línea al inicio (seguidas de salto de línea)
     /^[^\n]*(no necesito llamar|no hay una función|puedo simplemente|no es necesario llamar)[^\n]*\n+/gi,
     /^[^\n]*(como (no hay|la pregunta|se trata))[^\n]*\n+/gi,
-    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad|JSON|formato|respuesta|natural|proporcion|asistencia|ilegales|dañinas|contenido))[^\n]*\n+/gi,
-    /^[^\n]*(lo sient[ao],?\s*(pero|lamentablemente)?[^\n]*(no puedo|no tengo|no soy|no estoy)[^\n]*(ayud|proporcion|asistir|brind|facilit))[^\n]*\n+/gi,
-    /^(lo sient[ao][^.]*\.[^\n]*\n*)/gi,
+    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad|JSON|formato|proporcion|asistencia|ilegales|dañinas|contenido relacionado|política))[^\n]*\n+/gi,
+    /^[^\n]*(lo sient[ao],?\s*(pero|lamentablemente)?[^\n]*(no puedo|no soy|no estoy)[^\n]*(proporcion|asistir|brind|facilit|ayud.*activ|ayud.*ilegal))[^\n]*\n+/gi,
     /^[^\n]*(sin embargo[^,\n]*(puedo ayudarte|podría ayudarte|te puedo))[^\n]*\n+/gi,
     /^[^\n]*(sin embargo[^,\n]*puedo ayudarte)[^\n]*\n+/gi,
     /^[^\n]*(entiendo (que|tu)|comprendo)[^\n]*(pero|sin embargo)[^\n]*\n+/gi,
@@ -332,6 +340,9 @@ function sanitizeResponse(text: string): string {
     /[.\s]*no puedo proporcionar asistencia[^.]*\./gi,
     /[.\s]*no puedo (ayudar|asistir) con[^.]*(ilegales|dañinas|contenido|actividades)[^.]*\./gi,
     /[.\s]*esto (está|parece) fuera de (mi|mis)[^.]*\./gi,
+    /[.\s]*no puedo proporcionar información sobre (herramientas|materiales|repuestos|productos|precios|características)[^.]*\./gi,
+    /[.\s]*no puedo proporcionar información sobre (herramientas|materiales|repuestos|productos|precios)[^.]*$/gi,
+    /[.\s]*no (estoy|me es posible) (en posición|permitido|autorizado)[^.]*\./gi,
     // variantes sin punto al final (fin de string)
     /[.\s]*no puedo proporcionar una respuesta en formato JSON[^.]*$/gi,
     /[.\s]*no puedo proporcionar[^.]*en formato JSON[^.]*$/gi,
@@ -420,9 +431,11 @@ export async function createAgentGraph(sessionId: string, catalogoActivo?: strin
           new SystemMessage(systemPrompt),
           ...state.messages,
           new HumanMessage(
-            `[INSTRUCCIÓN INTERNA]: Tu respuesta anterior fue inválida (no uses JSON). ` +
-            `Responde en español natural, sin llamar herramientas, basándote SOLO en el catálogo del sistema. ` +
-            `Mensaje original del cliente: "${lastUserMsg?.content ?? ''}"`
+            `[INSTRUCCIÓN INTERNA — NO MOSTRAR AL CLIENTE]: Eres asistente de ventas en una tienda 100% legítima. ` +
+            `Tu respuesta anterior fue rechazada por el sistema. Debes responder directamente sobre productos del catálogo inyectado en el system prompt. ` +
+            `Los productos de esta tienda (alimentos, herramientas eléctricas, repuestos de auto) son completamente legales. ` +
+            `Responde en español natural con nombre del producto y precio. NO uses JSON. ` +
+            `Consulta del cliente: "${lastUserMsg?.content ?? ''}"`
           ),
         ];
         try {
