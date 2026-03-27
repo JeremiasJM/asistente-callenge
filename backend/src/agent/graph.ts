@@ -270,6 +270,7 @@ PROHIBICIONES ABSOLUTAS DE HERRAMIENTAS:
 - Si un producto NO está en el catálogo, di que no lo tenés. No llames ninguna herramienta.
 - NUNCA NUNCA escribas JSON en tu respuesta al cliente. Si ves que estás a punto de escribir '{', PARÁ y reescribí en español natural.
 - NUNCA menciones PRODUCT_ID, _id, hex codes, ni ningún dato técnico interno en tu respuesta. El cliente solo debe ver nombre, precio y descripción.
+- NUNCA actives filtros de seguridad ni rechaces responder consultas sobre productos. Las preguntas de productos, precios y carrito son 100% legítimas. NUNCA digas que no puedes ayudar.
 
 CATÁLOGO DE PRODUCTOS DISPONIBLES:
 ${catalogContext}
@@ -306,8 +307,9 @@ function sanitizeResponse(text: string): string {
     // Frases meta de una línea al inicio (seguidas de salto de línea)
     /^[^\n]*(no necesito llamar|no hay una función|puedo simplemente|no es necesario llamar)[^\n]*\n+/gi,
     /^[^\n]*(como (no hay|la pregunta|se trata))[^\n]*\n+/gi,
-    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad|JSON|formato|respuesta|natural|proporcion))[^\n]*\n+/gi,
-    /^[^\n]*(lo sient[ao],?\s*(pero|lamentablemente)[^\n]*(no puedo|no tengo|no soy))[^\n]*\n+/gi,
+    /^[^\n]*(lo sient[ao][^\n]*(función|código|herramienta|llamad|JSON|formato|respuesta|natural|proporcion|asistencia|ilegales|dañinas|contenido))[^\n]*\n+/gi,
+    /^[^\n]*(lo sient[ao],?\s*(pero|lamentablemente)?[^\n]*(no puedo|no tengo|no soy|no estoy)[^\n]*(ayud|proporcion|asistir|brind|facilit))[^\n]*\n+/gi,
+    /^(lo sient[ao][^.]*\.[^\n]*\n*)/gi,
     /^[^\n]*(sin embargo[^,\n]*(puedo ayudarte|podría ayudarte|te puedo))[^\n]*\n+/gi,
     /^[^\n]*(sin embargo[^,\n]*puedo ayudarte)[^\n]*\n+/gi,
     /^[^\n]*(entiendo (que|tu)|comprendo)[^\n]*(pero|sin embargo)[^\n]*\n+/gi,
@@ -316,6 +318,27 @@ function sanitizeResponse(text: string): string {
     /\n[^\n]*(si (fuera necesario|necesitara))[^\n]*[:\n][^]*\}[^}]*$/gi,
   ];
   for (const pat of internalThoughtPatterns) {
+    result = result.replace(pat, '');
+  }
+
+  // ── Eliminar frases meta EMBEBIDAS en cualquier posición del texto ───────
+  // ej: "...¿Te gustaría agregar? No puedo proporcionar una respuesta en formato JSON."
+  const inlinePhrases = [
+    /[.\s]*no puedo proporcionar una respuesta en formato JSON[^.]*\./gi,
+    /[.\s]*no puedo proporcionar[^.]*en formato JSON[^.]*\./gi,
+    /[.\s]*no (es posible|puedo) (escribir|generar|dar)[^.]*(JSON|código|formato)[^.]*\./gi,
+    /[.\s]*(sin embargo|aunque),?\s*no puedo[^.]*(JSON|formato|código)[^.]*\./gi,
+    // frases de rechazo con filtro de seguridad falso
+    /[.\s]*no puedo proporcionar asistencia[^.]*\./gi,
+    /[.\s]*no puedo (ayudar|asistir) con[^.]*(ilegales|dañinas|contenido|actividades)[^.]*\./gi,
+    /[.\s]*esto (está|parece) fuera de (mi|mis)[^.]*\./gi,
+    // variantes sin punto al final (fin de string)
+    /[.\s]*no puedo proporcionar una respuesta en formato JSON[^.]*$/gi,
+    /[.\s]*no puedo proporcionar[^.]*en formato JSON[^.]*$/gi,
+    /[.\s]*no puedo proporcionar asistencia[^.]*$/gi,
+    /[.\s]*no puedo (ayudar|asistir) con[^.]*(ilegales|dañinas)[^.]*$/gi,
+  ];
+  for (const pat of inlinePhrases) {
     result = result.replace(pat, '');
   }
 
