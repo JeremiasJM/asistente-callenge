@@ -9,8 +9,9 @@ RUN npm ci --omit=dev
 
 # Copiar fuentes y compilar TypeScript
 COPY tsconfig.json ./
+COPY .swcrc ./
 COPY src ./src
-RUN npm install --save-dev typescript ts-node && npx tsc
+RUN npm install --save-dev @swc/core @swc/cli && npx swc src -d dist --strip-leading-paths
 
 # ── Etapa 2: Producción ───────────────────────────────────────────────────
 FROM node:20-alpine AS runner

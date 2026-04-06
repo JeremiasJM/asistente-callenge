@@ -1,3 +1,5 @@
+import type { AgentConfig } from '../types';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export async function getCart(sessionId: string) {
@@ -28,7 +30,7 @@ export async function getAgentConfig() {
   return res.json();
 }
 
-export async function updateAgentConfig(config: Record<string, unknown>) {
+export async function updateAgentConfig(config: AgentConfig) {
   const res = await fetch(`${API_URL}/api/config`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
