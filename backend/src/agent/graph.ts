@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { ChatOllama } from '@langchain/ollama';
+import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, AIMessage, SystemMessage, BaseMessage } from '@langchain/core/messages';
 import { StateGraph, MessagesAnnotation, END, START } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
@@ -442,13 +442,12 @@ export async function createAgentGraph(sessionId: string, catalogoActivo?: strin
   const cachedCfg = await getCachedConfig();
   const temperature = typeof cachedCfg?.temperature === 'number' ? cachedCfg.temperature : 0.1;
 
-  const ollamaModel = process.env.OLLAMA_MODEL || 'llama3.1';
-  const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+  const openaiModel = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-  const llm = new ChatOllama({
-    baseUrl: ollamaUrl,
-    model: ollamaModel,
+  const llm = new ChatOpenAI({
+    modelName: openaiModel,
     temperature,
+    apiKey: process.env.OPENAI_API_KEY,
   }).bindTools(cartTools);
 
   const toolNode = new ToolNode(cartTools);
@@ -509,7 +508,7 @@ export async function createAgentGraph(sessionId: string, catalogoActivo?: strin
 }
 
 // ── Timeout helper ────────────────────────────────────────────────────────
-const AGENT_TIMEOUT_MS = 300_000; // 5 minutos máximo por llamada a Ollama
+const AGENT_TIMEOUT_MS = 120_000; // 2 minutos máximo por llamada a OpenAI
 function rejectAfter(ms: number, label = 'timeout'): Promise<never> {
   return new Promise((_, reject) =>
     setTimeout(() => reject(new Error(`${label}: exceeded ${ms}ms`)), ms)
@@ -573,22 +572,28 @@ export async function runAgent(
 
     const finalResponse = await Promise.race([
       runWithTimeout(),
-      rejectAfter(AGENT_TIMEOUT_MS, 'Ollama timeout'),
+      rejectAfter(AGENT_TIMEOUT_MS, 'OpenAI timeout'),
     ]);
 
     return { response: finalResponse || '¿En qué más puedo ayudarte?', traces };
   } catch (error) {
     console.error('Error en agente:', error);
     const errMsg = String(error);
-    if (errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch')) {
+    if (errMsg.includes('401') || errMsg.includes('Incorrect API key') || errMsg.includes('invalid_api_key')) {
       return {
-        response: '⚠️ No puedo conectarme a Ollama. Ejecutá: `ollama serve` y luego: `ollama pull llama3.1`',
+        response: '⚠️ API key de OpenAI inválida. Verificá la variable OPENAI_API_KEY en el servidor.',
+        traces,
+      };
+    }
+    if (errMsg.includes('429') || errMsg.includes('rate limit') || errMsg.includes('quota')) {
+      return {
+        response: '⚠️ Límite de solicitudes de OpenAI alcanzado. Intentá de nuevo en unos momentos.',
         traces,
       };
     }
     if (errMsg.includes('timeout')) {
       return {
-        response: '⚠️ Ollama tardó demasiado en responder (> 5 min). El modelo puede estar cargando; intentá de nuevo en un momento.',
+        response: '⚠️ OpenAI tardó demasiado en responder. Intentá de nuevo en un momento.',
         traces,
       };
     }
@@ -659,10 +664,12 @@ export async function* runAgentStream(
   } catch (error) {
     const errMsg = String(error);
     let humanError: string;
-    if (errMsg.includes('ECONNREFUSED') || errMsg.includes('fetch')) {
-      humanError = '⚠️ No puedo conectarme a Ollama. Ejecutá: `ollama serve` y luego: `ollama pull llama3.1`';
+    if (errMsg.includes('401') || errMsg.includes('Incorrect API key') || errMsg.includes('invalid_api_key')) {
+      humanError = '⚠️ API key de OpenAI inválida. Verificá la variable OPENAI_API_KEY en el servidor.';
+    } else if (errMsg.includes('429') || errMsg.includes('rate limit') || errMsg.includes('quota')) {
+      humanError = '⚠️ Límite de solicitudes de OpenAI alcanzado. Intentá de nuevo en unos momentos.';
     } else if (errMsg.includes('timeout')) {
-      humanError = '⚠️ Ollama tardó demasiado en responder (> 5 min). El modelo puede estar cargando; intentá de nuevo en un momento.';
+      humanError = '⚠️ OpenAI tardó demasiado en responder. Intentá de nuevo en un momento.';
     } else {
       humanError = 'Ocurrió un error procesando tu mensaje. Por favor intentá de nuevo.';
     }

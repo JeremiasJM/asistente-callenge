@@ -47,7 +47,7 @@ function formatTime(date: Date): string {
   return new Date(date).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ChatPlayground() {
+export default function ChatPlayground({ embedMode = false }: { embedMode?: boolean }) {
   const [sessionId] = useState<string>(() => getSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -160,7 +160,11 @@ export default function ChatPlayground() {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden h-[600px] w-full max-w-[480px]">
+    <div className={`bg-white flex flex-col overflow-hidden ${
+      embedMode
+        ? 'w-full h-full'
+        : 'rounded-2xl shadow-2xl border border-gray-100 h-[600px] max-w-[480px]'
+    }`}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-3">

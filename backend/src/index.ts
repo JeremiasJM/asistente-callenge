@@ -13,10 +13,24 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+
+// Orígenes permitidos: frontend Vercel + fullmindtech.com + localhost dev
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://fullmindtech.com',
+  'https://www.fullmindtech.com',
+  'http://localhost:3000',
+].filter(Boolean);
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Permitir peticiones sin origin (e.g. apps móviles, Postman)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.some((o) => origin.startsWith(o))) {
+      return callback(null, true);
+    }
+    callback(new Error(`CORS: origen no permitido → ${origin}`));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '1mb' }));
@@ -87,7 +101,7 @@ const start = async () => {
   app.listen(PORT, () => {
     console.log(`✅ Backend corriendo en http://localhost:${PORT}`);
     console.log(`   Health:  http://localhost:${PORT}/api/health`);
-    console.log(`   Ollama:  http://localhost:${PORT}/api/health/ollama`);
+    console.log(`   Modelo:  ${process.env.OPENAI_MODEL || 'gpt-4o-mini'} (OpenAI)`);
   });
 };
 
