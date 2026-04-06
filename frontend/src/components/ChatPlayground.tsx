@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import ReactMarkdown from 'react-markdown';
 import { Message, Cart, Trace } from '@/types';
 import { sendMessageStream, clearCart, clearConversation } from '@/lib/api';
 import CartPanel from './CartPanel';
@@ -285,6 +286,10 @@ export default function ChatPlayground({ embedMode = false }: { embedMode?: bool
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:0ms]" />
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:150ms]" />
                     <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:300ms]" />
+                  </div>
+                ) : msg.role === 'assistant' ? (
+                  <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-strong:font-semibold">
+                    <ReactMarkdown>{msg.content + (msg.isStreaming ? '▍' : '')}</ReactMarkdown>
                   </div>
                 ) : (
                   <p className="whitespace-pre-wrap">
