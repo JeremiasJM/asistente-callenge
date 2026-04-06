@@ -32,7 +32,7 @@ function Invoke-ApiTest {
     [string]$Url,
     [hashtable]$Body  = $null,
     [scriptblock]$Val,
-    [bool]$NeedsOllama = $false,
+    [bool]$NeedsLLM  = $false,
     [int]$Timeout      = 30
   )
 
@@ -46,7 +46,7 @@ function Invoke-ApiTest {
     error       = $null
     durationMs  = 0
     snip        = ""
-    ollama      = $NeedsOllama
+    needsLLM    = $NeedsLLM
     ts          = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
     run         = $Script:RunNumber
   }
@@ -88,9 +88,9 @@ function Invoke-ApiTest {
     $r.durationMs = [int]((Get-Date) - $start).TotalMilliseconds
     $e = $_.Exception.Message
     $r.error = $e
-    if ($NeedsOllama -and ($e -match "timeout|refused|connect|operation")) {
+    if ($NeedsLLM -and ($e -match "timeout|refused|connect|operation|401|429")) {
       $r.passed = $null
-      $r.error  = "SKIP (Ollama no disponible)"
+      $r.error  = "SKIP (OpenAI no disponible)"
     } else {
       # Intentar obtener el status code del response de error
       try {
@@ -160,14 +160,9 @@ function Invoke-TestSuite {
   # 1. Health
   Write-Sub "Health y estado del servidor"
 
-  Invoke-ApiTest -Name "GET /api/health -> 200 + mongodb:connected" `
+  Invoke-ApiTest -Name "GET /api/health -> 200 + mongodb:connected + openai:configured" `
     -Url "$BaseUrl/api/health" `
-    -Val { param($j) $j.status -eq "ok" -and $j.mongodb -eq "connected" }
-
-  Invoke-ApiTest -Name "GET /api/health/ollama -> responde (200 o 503)" `
-    -Url "$BaseUrl/api/health/ollama" `
-    -Val { param($j,$sc) $sc -eq 200 -or $sc -eq 503 } `
-    -NeedsOllama $true -Timeout 10
+    -Val { param($j) $j.status -eq "ok" -and $j.mongodb -eq "connected" -and $j.openai -eq "configured" }
 
   Invoke-ApiTest -Name "GET /api/ruta-inexistente -> debe devolver 404" `
     -Url "$BaseUrl/api/ruta-inexistente-xyz-test" `
@@ -273,19 +268,19 @@ function Invoke-TestSuite {
     -Val { param($j) $j -is [array] -or $j -ne $null }
 
   # 7. Chat LLM
-  Write-Sub "Chat con LLM (requiere Ollama)"
+  Write-Sub "Chat con LLM (requiere OpenAI)"
 
   Invoke-ApiTest -Name "POST /api/chat -> responde (cualquier respuesta sin crash)" `
     -Method "POST" -Url "$BaseUrl/api/chat" `
     -Body @{ message = "Hola que productos tienen?"; sessionId = $sid; catalogoActivo = "supermercado" } `
     -Val { param($j) $j.response -ne $null -and $j.response.Length -gt 5 } `
-    -NeedsOllama $true -Timeout 150
+    -NeedsLLM $true -Timeout 60
 
-  Invoke-ApiTest -Name "POST /api/chat -> error Ollama devuelve mensaje amigable (no 500)" `
+  Invoke-ApiTest -Name "POST /api/chat -> sin API key devuelve mensaje amigable (no 500)" `
     -Method "POST" -Url "$BaseUrl/api/chat" `
     -Body @{ message = "Ver mi carrito"; sessionId = $sid; catalogoActivo = "ferreteria" } `
     -Val { param($j) $j.response -ne $null } `
-    -NeedsOllama $true -Timeout 150
+    -NeedsLLM $true -Timeout 60
 
   # Resumen
   $iter   = $Script:AllResults | Where-Object { $_.run -eq $Script:RunNumber }
@@ -439,7 +434,7 @@ Write-Host "  Tests totales: $total" -ForegroundColor White
 Write-Host "  Pasaron      : $pass" -ForegroundColor Green
 $failColor = if ($fail -eq 0) { "Green" } else { "Red" }
 Write-Host "  Fallaron     : $fail" -ForegroundColor $failColor
-Write-Host "  Omitidos     : $skip (requieren Ollama)" -ForegroundColor Yellow
+Write-Host "  Omitidos     : $skip (requieren OpenAI activo)" -ForegroundColor Yellow
 Write-Host ""
 if ($fail -eq 0) {
   Write-Host "  Todos los tests pasaron correctamente!" -ForegroundColor Green

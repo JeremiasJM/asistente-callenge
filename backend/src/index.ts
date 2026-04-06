@@ -35,7 +35,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 
-// ── Health check básico ──────────────────────────────────────────────────
+// ── Health check ─────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   const mongoState = ['disconnected', 'connected', 'connecting', 'disconnecting'];
   res.json({
@@ -43,37 +43,9 @@ app.get('/api/health', (_req, res) => {
     timestamp: new Date().toISOString(),
     mongodb: mongoState[mongoose.connection.readyState] || 'unknown',
     uptime: Math.floor(process.uptime()),
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    openai: process.env.OPENAI_API_KEY ? 'configured' : 'missing-api-key',
   });
-});
-
-// ── Health check extendido: verifica Ollama ──────────────────────────────
-app.get('/api/health/ollama', async (_req, res) => {
-  const start = Date.now();
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    const resp = await fetch(`${OLLAMA_URL}/api/tags`, { signal: controller.signal });
-    clearTimeout(timer);
-    const data = await resp.json() as { models?: { name: string }[] };
-    const models = (data.models || []).map((m) => m.name);
-    res.json({
-      status: 'ok',
-      ollama: 'running',
-      url: OLLAMA_URL,
-      models,
-      latencyMs: Date.now() - start,
-    });
-  } catch (err) {
-    const msg = String(err);
-    res.status(503).json({
-      status: 'error',
-      ollama: msg.includes('abort') ? 'timeout' : 'unreachable',
-      url: OLLAMA_URL,
-      error: msg,
-      latencyMs: Date.now() - start,
-      hint: 'Ejecutá: ollama serve   |   ollama pull llama3.1',
-    });
-  }
 });
 
 // Routes

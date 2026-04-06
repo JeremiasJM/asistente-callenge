@@ -59,17 +59,17 @@ do {
 $mongoStatus = if ($h -and $h.mongodb) { $h.mongodb } else { "unknown" }
 Write-Host "  [OK] Backend operativo (MongoDB: $mongoStatus)" -ForegroundColor Green
 
-# Verificar Ollama (solo informativo)
-Write-Host "  Verificando Ollama..." -ForegroundColor Yellow
-$olStatus = "no disponible"
+# Verificar OpenAI
+Write-Host "  Verificando OpenAI..." -ForegroundColor Yellow
 try {
-  $ol = Invoke-RestMethod -Uri "$BaseUrl/api/health/ollama" -TimeoutSec 8 -ErrorAction Stop
-  $modelList = if ($ol.models) { $ol.models -join ", " } else { "ninguno" }
-  Write-Host "  [OK] Ollama corriendo. Modelos: $modelList" -ForegroundColor Green
-  $olStatus = "disponible"
+  $h2 = Invoke-RestMethod -Uri "$BaseUrl/api/health" -TimeoutSec 8 -ErrorAction Stop
+  if ($h2.openai -eq "configured") {
+    Write-Host "  [OK] OpenAI configurado. Modelo: $($h2.model)" -ForegroundColor Green
+  } else {
+    Write-Host "  [WARN] OPENAI_API_KEY no detectada en el backend -- tests LLM seran marcados SKIP" -ForegroundColor Yellow
+  }
 } catch {
-  Write-Host "  [WARN] Ollama no disponible -- tests LLM seran marcados SKIP" -ForegroundColor Yellow
-  Write-Host "         Para activarlos: ollama serve  +  ollama pull llama3.1" -ForegroundColor Gray
+  Write-Host "  [WARN] No se pudo verificar OpenAI" -ForegroundColor Yellow
 }
 
 Write-Host ""
