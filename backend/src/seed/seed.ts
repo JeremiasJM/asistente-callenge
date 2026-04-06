@@ -6,7 +6,7 @@ import { AgentConfig } from '../models/AgentConfig';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/agente-ventas';
+const MONGODB_URI = process.env.DATABASE_URL || 'mongodb://localhost:27017/agente-ventas';
 
 const supermercadoProducts = [
   { nombre: 'Arroz Largo Fino 1kg', categoria: 'Almacén', tags: ['arroz', 'cereal', 'granos', 'básico'], venta: true, precio: 850, stock: 200, estado: 'activo' },

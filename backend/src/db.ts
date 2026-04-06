@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 export const connectDB = async (): Promise<void> => {
-  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/agente-ventas';
+  const uri = process.env.DATABASE_URL || 'mongodb://localhost:27017/agente-ventas';
   try {
     await mongoose.connect(uri);
     console.log('✅ MongoDB conectado en:', uri);
