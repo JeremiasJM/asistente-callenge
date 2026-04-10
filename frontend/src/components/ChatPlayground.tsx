@@ -48,13 +48,28 @@ function formatTime(date: Date): string {
   return new Date(date).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ChatPlayground({ embedMode = false }: { embedMode?: boolean }) {
+type ChatPlaygroundProps = {
+  embedMode?: boolean;
+  /**
+   * Catálogo pre-seleccionado al montar el componente.
+   * Valores válidos: 'supermercado' | 'ferreteria' | 'autopartes'
+   */
+  initialCatalog?: string;
+};
+
+export default function ChatPlayground({ embedMode = false, initialCatalog }: ChatPlaygroundProps) {
   const [sessionId] = useState<string>(() => getSessionId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [cart, setCart] = useState<Cart>({ sessionId: '', items: [], total: 0 });
-  const [catalogo, setCatalogo] = useState<CatalogId | null>(null);
+  const [catalogo, setCatalogo] = useState<CatalogId | null>(() => {
+    const validIds = CATALOGS.map((c) => c.id) as string[];
+    if (initialCatalog && validIds.includes(initialCatalog)) {
+      return initialCatalog as CatalogId;
+    }
+    return null;
+  });
   const [showTraces, setShowTraces] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);

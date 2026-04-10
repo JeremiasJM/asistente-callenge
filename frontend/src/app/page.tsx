@@ -1,9 +1,24 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import ChatPlayground from '@/components/ChatPlayground';
 
-export default function HomePage() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const isEmbed = searchParams.get('embed') === '1';
+  const initialCatalog = searchParams.get('catalog') ?? undefined;
+
+  // Modo embed: muestra solo el chat sin chrome externo
+  if (isEmbed) {
+    return (
+      <div className="w-full h-screen overflow-hidden flex flex-col bg-white">
+        <ChatPlayground embedMode initialCatalog={initialCatalog} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-brand-dark">
       {/* Navbar */}
@@ -77,5 +92,13 @@ export default function HomePage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="w-full h-screen bg-brand-dark" />}>
+      <HomeContent />
+    </Suspense>
   );
 }
